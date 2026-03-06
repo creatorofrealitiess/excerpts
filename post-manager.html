@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#080808" />
+  <title>BookTok Posts</title>
+  <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiQm9va1RvayBQb3N0cyIsInNob3J0X25hbWUiOiJCVCBQb3N0cyIsInN0YXJ0X3VybCI6Ii4vIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiIzA4MDgwOCIsInRoZW1lX2NvbG9yIjoiIzA4MDgwOCJ9" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #080808; --bg2: #0e0e0e; --bg3: #141414; --border: #1a1a1a; --border2: #252525;
+      --text: #d4d4d4; --text2: #888; --text3: #555; --text4: #333;
+      --re: #f0a5a5; --re-bg: #2a1515; --re-border: #4a2525;
+      --dk: #a5c4f0; --dk-bg: #1f2a3d; --dk-border: #25354a;
+      --pv: #a5f0a5; --pv-bg: #152a15; --pv-border: #254a25;
+      --draft: #888; --ready: #d4c060; --posted: #5cb85c;
+      --accent: #d4c060; --accent-bg: #1a1a0f; --accent-border: #2a2a1a;
+      --font: 'DM Sans', -apple-system, sans-serif; --mono: 'DM Mono', monospace;
+      --safe-b: env(safe-area-inset-bottom, 0px);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { background: var(--bg); color: var(--text); font-family: var(--font); overflow-x: hidden; }
+    input, textarea, select, button { font-family: var(--font); }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+    .fade-in { animation: fadeIn 0.3s ease both; }
+    .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; transition: border-color 0.15s; }
+    .card:active { border-color: var(--border2); }
+    .btn { border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .btn:active { transform: scale(0.97); }
+    .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text3); font-family: var(--mono); }
+    .input { width: 100%; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; outline: none; transition: border-color 0.2s; }
+    .input:focus { border-color: var(--border2); }
+    .status-draft { color: var(--draft); background: #1a1a1a; border-color: #2a2a2a; }
+    .status-ready { color: var(--ready); background: var(--accent-bg); border-color: var(--accent-border); }
+    .status-posted { color: var(--posted); background: #0f1a0f; border-color: #1a2e1a; }
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #1a1a1a; border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+// ============================================================
+// FIREBASE CONFIG — User fills this in on first launch
+// ============================================================
+const STORAGE_KEY = "btpm_firebase_config";
+const PASSPHRASE_KEY = "btpm_passphrase";
+
+const PROJECT_MAP = {
+  RE: { label: "RE", color: "#f0a5a5", bg: "#2a1515", border: "#4a2525", authors: ["Veda Rose", "Lila Blair", "Zara Blaze", "Liv Raven"] },
+  DK: { label: "DK", color: "#a5c4f0", bg: "#1f2a3d", border: "#25354a", authors: ["Lys Kane", "Lexi Asher"] },
+  PV: { label: "PV", color: "#a5f0a5", bg: "#152a15", border: "#254a25", authors: ["Lara Hart"] },
+};
+
+const STATUS_COLORS = { draft: { color: "#888", bg: "#1a1a1a", border: "#2a2a2a" }, ready: { color: "#d4c060", bg: "#1a1a0f", border: "#2a2a1a" }, posted: { color: "#5cb85c", bg: "#0f1a0f", border: "#1a2e1a" } };
+const STATUS_ORDER = ["draft", "ready", "posted"];
+
+function generateId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+// ============================================================
+// IMAGE UTILITIES
+// ============================================================
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function compressImage(dataUrl, maxWidth = 1200, quality = 0.8) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxWidth / img.width);
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.src = dataUrl;
+  });
+}
+
+function makeThumbnail(dataUrl, size = 200) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(size / img.width, size / img.height, 1);
+      const c = document.createElement("canvas");
+      c.width = img.width * s; c.height = img.height * s;
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL("image/jpeg", 0.6));
+    };
+    img.src = dataUrl;
+  });
+}
+
+// ============================================================
+// MAIN APP
+// ============================================================
+function App() {
+  const [firebaseConfig, setFirebaseConfig] = useState(null);
+  const [passphrase, setPassphrase] = useState("");
+  const [db, setDb] = useState(null);
+  const [storage, setStorage] = useState(null);
+  const [configInput, setConfigInput] = useState("");
+  const [passInput, setPassInput] = useState("");
+  const [configError, setConfigError] = useState("");
+  const [initializing, setInitializing] = useState(true);
+
+  // Try to load saved config
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      const savedPass = localStorage.getItem(PASSPHRASE_KEY);
+      if (saved && savedPass) {
+        const config = JSON.parse(saved);
+        initFirebase(config, savedPass);
+      } else {
+        setInitializing(false);
+      }
+    } catch { setInitializing(false); }
+  }, []);
+
+  function initFirebase(config, pass) {
+    try {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(config);
+      }
+      const database = firebase.database();
+      const store = firebase.storage();
+      // Test connection
+      const testRef = database.ref(`users/${pass}/test`);
+      testRef.set({ connected: true, ts: Date.now() }).then(() => {
+        setFirebaseConfig(config);
+        setPassphrase(pass);
+        setDb(database);
+        setStorage(store);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+        localStorage.setItem(PASSPHRASE_KEY, pass);
+        setInitializing(false);
+      }).catch(e => {
+        setConfigError("Firebase connection failed: " + e.message);
+        setInitializing(false);
+      });
+    } catch (e) {
+      setConfigError("Invalid config: " + e.message);
+      setInitializing(false);
+    }
+  }
+
+  function handleConnect() {
+    setConfigError("");
+    try {
+      const config = JSON.parse(configInput);
+      if (!passInput.trim()) { setConfigError("Enter a passphrase."); return; }
+      initFirebase(config, passInput.trim());
+    } catch { setConfigError("Invalid JSON. Paste your Firebase config object."); }
+  }
+
+  function handleDisconnect() {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(PASSPHRASE_KEY);
+    setFirebaseConfig(null);
+    setPassphrase("");
+    setDb(null);
+    setStorage(null);
+  }
+
+  if (initializing) {
+    return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)" }}>
+      <div style={{ color: "var(--text3)", fontFamily: "var(--mono)", fontSize: "12px", animation: "pulse 1.5s ease infinite" }}>Connecting...</div>
+    </div>;
+  }
+
+  if (!db) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)", padding: "24px" }}>
+        <div style={{ maxWidth: "420px", width: "100%" }} className="fade-in">
+          <div style={{ textAlign: "center", marginBottom: "32px" }}>
+            <div style={{ fontSize: "28px", marginBottom: "8px" }}>📖</div>
+            <div style={{ fontSize: "20px", fontWeight: 700, letterSpacing: "-0.5px", marginBottom: "4px" }}>BookTok Posts</div>
+            <div style={{ fontSize: "12px", color: "var(--text3)", fontFamily: "var(--mono)" }}>Connect your Firebase to get started</div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            <div>
+              <div className="label" style={{ marginBottom: "6px" }}>Firebase Config (JSON)</div>
+              <textarea value={configInput} onChange={e => setConfigInput(e.target.value)} placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","databaseURL":"..."}' className="input" style={{ height: "120px", resize: "vertical", fontSize: "11px", fontFamily: "var(--mono)" }} />
+            </div>
+            <div>
+              <div className="label" style={{ marginBottom: "6px" }}>Passphrase <span style={{ textTransform: "none", color: "var(--text4)" }}>(this is your user ID — same on all devices)</span></div>
+              <input value={passInput} onChange={e => setPassInput(e.target.value)} placeholder="Enter a memorable passphrase" className="input" />
+            </div>
+            {configError && <div style={{ padding: "8px 12px", background: "#1a0f0f", border: "1px solid #331a1a", borderRadius: "8px", color: "#e55", fontSize: "12px", fontFamily: "var(--mono)" }}>{configError}</div>}
+            <button onClick={handleConnect} className="btn" style={{ padding: "14px", fontSize: "14px", background: "#fff", color: "#000", width: "100%" }}>Connect</button>
+            <div style={{ fontSize: "11px", color: "var(--text4)", textAlign: "center", lineHeight: 1.6 }}>
+              Create a free Firebase project at <span style={{ color: "var(--text3)" }}>console.firebase.google.com</span>
+              <br />Enable Realtime Database + Storage, then paste the config here.
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return <PostManager db={db} storage={storage} passphrase={passphrase} onDisconnect={handleDisconnect} />;
+}
+
+// ============================================================
+// POST MANAGER
+// ============================================================
+function PostManager({ db, storage, passphrase, onDisconnect }) {
+  const [screen, setScreen] = useState("dashboard"); // dashboard | author | post
+  const [authors, setAuthors] = useState({});
+  const [posts, setPosts] = useState({});
+  const [selectedProject, setSelectedProject] = useState("ALL");
+  const [selectedAuthor, setSelectedAuthor] = useState(null);
+  const [selectedPost, setSelectedPost] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
+
+  const basePath = `users/${passphrase}`;
+
+  // Load all data from Firebase
+  useEffect(() => {
+    const authorsRef = db.ref(`${basePath}/authors`);
+    const postsRef = db.ref(`${basePath}/posts`);
+
+    authorsRef.on("value", snap => {
+      const data = snap.val() || {};
+      setAuthors(data);
+    });
+
+    postsRef.on("value", snap => {
+      const data = snap.val() || {};
+      setPosts(data);
+    });
+
+    // Initialize default authors if empty
+    authorsRef.once("value", snap => {
+      if (!snap.val()) {
+        const defaults = {};
+        Object.entries(PROJECT_MAP).forEach(([proj, info]) => {
+          info.authors.forEach(name => {
+            const id = name.toLowerCase().replace(/\s+/g, "-");
+            defaults[id] = { name, project: proj, hashtags: "", createdAt: Date.now() };
+          });
+        });
+        authorsRef.set(defaults);
+      }
+      setLoading(false);
+    });
+
+    return () => { authorsRef.off(); postsRef.off(); };
+  }, [db, basePath]);
+
+  // CRUD operations
+  const createPost = useCallback((authorId) => {
+    const id = generateId();
+    const post = {
+      authorId,
+      hook: "",
+      caption: "",
+      context: "",
+      notes: "",
+      status: "draft",
+      scheduledDate: "",
+      scheduledTime: "",
+      images: {},
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    db.ref(`${basePath}/posts/${id}`).set(post);
+    return id;
+  }, [db, basePath]);
+
+  const updatePost = useCallback((id, updates) => {
+    db.ref(`${basePath}/posts/${id}`).update({ ...updates, updatedAt: Date.now() });
+  }, [db, basePath]);
+
+  const deletePost = useCallback((id) => {
+    // Also delete images from storage
+    const post = posts[id];
+    if (post?.images) {
+      Object.keys(post.images).forEach(imgId => {
+        storage.ref(`${basePath}/images/${id}/${imgId}`).delete().catch(() => {});
+      });
+    }
+    db.ref(`${basePath}/posts/${id}`).remove();
+    if (selectedPost === id) { setSelectedPost(null); setScreen("author"); }
+  }, [db, storage, basePath, posts, selectedPost]);
+
+  const updateAuthorHashtags = useCallback((authorId, hashtags) => {
+    db.ref(`${basePath}/authors/${authorId}/hashtags`).set(hashtags);
+  }, [db, basePath]);
+
+  const addImageToPost = useCallback(async (postId, dataUrl, label = "background") => {
+    const imgId = generateId();
+    const compressed = await compressImage(dataUrl);
+    const thumb = await makeThumbnail(dataUrl);
+
+    // Upload full image to Firebase Storage
+    const ref = storage.ref(`${basePath}/images/${postId}/${imgId}`);
+    await ref.putString(compressed, "data_url");
+    const url = await ref.getDownloadURL();
+
+    // Save metadata to database
+    db.ref(`${basePath}/posts/${postId}/images/${imgId}`).set({
+      url,
+      thumb,
+      label,
+      createdAt: Date.now(),
+    });
+    return imgId;
+  }, [db, storage, basePath]);
+
+  const removeImageFromPost = useCallback((postId, imgId) => {
+    storage.ref(`${basePath}/images/${postId}/${imgId}`).delete().catch(() => {});
+    db.ref(`${basePath}/posts/${postId}/images/${imgId}`).remove();
+  }, [db, storage, basePath]);
+
+  const cycleStatus = useCallback((postId) => {
+    const current = posts[postId]?.status || "draft";
+    const next = STATUS_ORDER[(STATUS_ORDER.indexOf(current) + 1) % STATUS_ORDER.length];
+    updatePost(postId, { status: next });
+  }, [posts, updatePost]);
+
+  // Derived data
+  const authorList = useMemo(() => {
+    return Object.entries(authors).map(([id, data]) => ({
+      id, ...data,
+      postCount: Object.values(posts).filter(p => p.authorId === id).length,
+      readyCount: Object.values(posts).filter(p => p.authorId === id && p.status === "ready").length,
+      draftCount: Object.values(posts).filter(p => p.authorId === id && p.status === "draft").length,
+    })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [authors, posts]);
+
+  const authorPosts = useMemo(() => {
+    if (!selectedAuthor) return [];
+    return Object.entries(posts)
+      .filter(([_, p]) => p.authorId === selectedAuthor)
+      .map(([id, p]) => ({ id, ...p }))
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }, [posts, selectedAuthor]);
+
+  const currentPost = selectedPost ? { id: selectedPost, ...posts[selectedPost] } : null;
+  const currentAuthor = selectedAuthor ? { id: selectedAuthor, ...authors[selectedAuthor] } : null;
+
+  // Navigation
+  const goToDashboard = () => { setScreen("dashboard"); setSelectedAuthor(null); setSelectedPost(null); };
+  const goToAuthor = (authorId) => { setScreen("author"); setSelectedAuthor(authorId); setSelectedPost(null); };
+  const goToPost = (postId) => { setScreen("post"); setSelectedPost(postId); };
+
+  if (loading) {
+    return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ color: "var(--text3)", fontFamily: "var(--mono)", fontSize: "12px", animation: "pulse 1.5s ease infinite" }}>Loading...</div>
+    </div>;
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", paddingBottom: "calc(60px + var(--safe-b))" }}>
+      {/* HEADER */}
+      <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg2)", position: "sticky", top: 0, zIndex: 40 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          {screen !== "dashboard" && (
+            <button onClick={screen === "post" ? () => goToAuthor(posts[selectedPost]?.authorId) : goToDashboard} className="btn" style={{ padding: "6px 10px", fontSize: "18px", background: "transparent", color: "var(--text3)", lineHeight: 1 }}>←</button>
+          )}
+          <span style={{ fontSize: "15px" }}>📖</span>
+          <span style={{ fontSize: "15px", fontWeight: 700, letterSpacing: "-0.3px" }}>
+            {screen === "dashboard" ? "Posts" : screen === "author" ? currentAuthor?.name : "Edit Post"}
+          </span>
+          {screen === "author" && currentAuthor && (
+            <span style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "1.5px", padding: "2px 8px", borderRadius: "4px", background: PROJECT_MAP[currentAuthor.project]?.bg, color: PROJECT_MAP[currentAuthor.project]?.color, fontFamily: "var(--mono)", border: `1px solid ${PROJECT_MAP[currentAuthor.project]?.border}` }}>{currentAuthor.project}</span>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          {screen === "post" && currentPost && (
+            <button onClick={() => cycleStatus(selectedPost)} className="btn" style={{ padding: "4px 12px", fontSize: "11px", fontWeight: 600, fontFamily: "var(--mono)", border: `1px solid ${STATUS_COLORS[currentPost.status]?.border}`, background: STATUS_COLORS[currentPost.status]?.bg, color: STATUS_COLORS[currentPost.status]?.color }}>{currentPost.status}</button>
+          )}
+          {screen === "dashboard" && (
+            <button onClick={() => setShowSettings(!showSettings)} className="btn" style={{ padding: "6px 10px", fontSize: "14px", background: "transparent", color: "var(--text3)", lineHeight: 1 }}>⚙</button>
+          )}
+        </div>
+      </div>
+
+      {/* SETTINGS DROPDOWN */}
+      {showSettings && screen === "dashboard" && (
+        <div className="fade-in" style={{ padding: "16px", borderBottom: "1px solid var(--border)", background: "var(--bg2)" }}>
+          <button onClick={() => { if (confirm("Disconnect from Firebase? Your data stays safe in the cloud.")) onDisconnect(); }} className="btn" style={{ padding: "10px 16px", fontSize: "12px", background: "#1a0f0f", color: "#e55", border: "1px solid #331a1a", width: "100%" }}>Disconnect Firebase</button>
+        </div>
+      )}
+
+      {/* DASHBOARD */}
+      {screen === "dashboard" && (
+        <div className="fade-in" style={{ padding: "16px" }}>
+          {/* Project filter */}
+          <div style={{ display: "flex", gap: "6px", marginBottom: "20px", overflowX: "auto", paddingBottom: "4px" }}>
+            {["ALL", "RE", "DK", "PV"].map(p => (
+              <button key={p} onClick={() => setSelectedProject(p)} className="btn" style={{
+                padding: "6px 16px", fontSize: "12px", fontWeight: 600, fontFamily: "var(--mono)", whiteSpace: "nowrap",
+                border: `1px solid ${selectedProject === p ? (p === "ALL" ? "var(--border2)" : PROJECT_MAP[p]?.border) : "var(--border)"}`,
+                background: selectedProject === p ? (p === "ALL" ? "var(--bg3)" : PROJECT_MAP[p]?.bg) : "transparent",
+                color: selectedProject === p ? (p === "ALL" ? "var(--text)" : PROJECT_MAP[p]?.color) : "var(--text3)",
+              }}>{p}</button>
+            ))}
+          </div>
+
+          {/* Author cards */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {authorList.filter(a => selectedProject === "ALL" || a.project === selectedProject).map((author, i) => (
+              <div key={author.id} onClick={() => goToAuthor(author.id)} className="card" style={{ padding: "14px 16px", cursor: "pointer", animationDelay: `${i * 0.05}s` }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "1px", padding: "2px 7px", borderRadius: "3px", background: PROJECT_MAP[author.project]?.bg, color: PROJECT_MAP[author.project]?.color, fontFamily: "var(--mono)", border: `1px solid ${PROJECT_MAP[author.project]?.border}` }}>{author.project}</span>
+                    <span style={{ fontSize: "14px", fontWeight: 600 }}>{author.name}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    {author.readyCount > 0 && <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "10px", background: "var(--accent-bg)", color: "var(--ready)", fontFamily: "var(--mono)", border: "1px solid var(--accent-border)" }}>{author.readyCount} ready</span>}
+                    {author.draftCount > 0 && <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "10px", background: "#1a1a1a", color: "var(--text3)", fontFamily: "var(--mono)" }}>{author.draftCount}</span>}
+                    <span style={{ color: "var(--text4)", fontSize: "16px" }}>›</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* AUTHOR VIEW */}
+      {screen === "author" && currentAuthor && (
+        <div className="fade-in" style={{ padding: "16px" }}>
+          {/* Hashtags */}
+          <div className="card" style={{ padding: "12px 14px", marginBottom: "16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <span className="label">Hashtags</span>
+              <button onClick={() => { if (currentAuthor.hashtags) { navigator.clipboard.writeText(currentAuthor.hashtags); } }} className="btn" style={{ padding: "3px 10px", fontSize: "10px", background: "transparent", color: "var(--text3)", border: "1px solid var(--border)" }}>Copy All</button>
+            </div>
+            <textarea value={currentAuthor.hashtags || ""} onChange={e => updateAuthorHashtags(selectedAuthor, e.target.value)} placeholder="#mafiaromance #arrangedmarriage #enemiestolovers #booktok #romancebooks" className="input" style={{ height: "60px", resize: "vertical", fontSize: "12px", fontFamily: "var(--mono)" }} />
+          </div>
+
+          {/* Post cards */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <span className="label">{authorPosts.length} Posts</span>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {authorPosts.map((post, i) => {
+              const firstImg = post.images ? Object.values(post.images)[0] : null;
+              const hookPreview = post.hook ? (post.hook.length > 50 ? post.hook.substring(0, 50) + "..." : post.hook) : "No hook yet";
+              return (
+                <div key={post.id} onClick={() => goToPost(post.id)} className="card" style={{ padding: "12px", cursor: "pointer", display: "flex", gap: "12px", alignItems: "center", animationDelay: `${i * 0.04}s` }}>
+                  {firstImg ? (
+                    <img src={firstImg.thumb || firstImg.url} alt="" style={{ width: "52px", height: "52px", borderRadius: "6px", objectFit: "cover", border: "1px solid var(--border)" }} />
+                  ) : (
+                    <div style={{ width: "52px", height: "52px", borderRadius: "6px", background: "var(--bg)", border: "1px dashed var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", opacity: 0.3, flexShrink: 0 }}>📷</div>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "13px", fontWeight: 500, color: "var(--text)", marginBottom: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{hookPreview}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "10px", padding: "1px 8px", borderRadius: "8px", fontFamily: "var(--mono)", fontWeight: 600, border: "1px solid", ...STATUS_COLORS[post.status] }}>{post.status}</span>
+                      {post.scheduledDate && <span style={{ fontSize: "10px", color: "var(--text3)", fontFamily: "var(--mono)" }}>{post.scheduledDate}</span>}
+                    </div>
+                  </div>
+                  <span style={{ color: "var(--text4)", fontSize: "16px", flexShrink: 0 }}>›</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* FAB */}
+          <button onClick={() => { const id = createPost(selectedAuthor); goToPost(id); }} className="btn" style={{ position: "fixed", bottom: "calc(24px + var(--safe-b))", right: "24px", width: "56px", height: "56px", borderRadius: "50%", background: "#fff", color: "#000", fontSize: "24px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 20px rgba(0,0,0,0.5)", zIndex: 30, lineHeight: 1 }}>+</button>
+        </div>
+      )}
+
+      {/* POST DETAIL */}
+      {screen === "post" && currentPost && (
+        <PostEditor
+          post={currentPost}
+          author={currentAuthor}
+          onUpdate={(updates) => updatePost(selectedPost, updates)}
+          onDelete={() => { if (confirm("Delete this post?")) deletePost(selectedPost); }}
+          onAddImage={(dataUrl, label) => addImageToPost(selectedPost, dataUrl, label)}
+          onRemoveImage={(imgId) => removeImageFromPost(selectedPost, imgId)}
+          onCycleStatus={() => cycleStatus(selectedPost)}
+          authorHashtags={currentAuthor?.hashtags || ""}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// POST EDITOR
+// ============================================================
+function PostEditor({ post, author, onUpdate, onDelete, onAddImage, onRemoveImage, onCycleStatus, authorHashtags }) {
+  const [copied, setCopied] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
+  const pasteAreaRef = useRef(null);
+
+  const images = post.images ? Object.entries(post.images).map(([id, data]) => ({ id, ...data })) : [];
+
+  const copyText = async (text, field) => {
+    try { await navigator.clipboard.writeText(text); setCopied(field); setTimeout(() => setCopied(""), 1500); } catch {}
+  };
+
+  const copyAll = async () => {
+    const parts = [];
+    if (post.hook) parts.push(post.hook);
+    if (post.caption) parts.push(post.caption);
+    if (authorHashtags) parts.push(authorHashtags);
+    await copyText(parts.join("\n\n"), "all");
+  };
+
+  // Handle paste from clipboard (for desktop)
+  const handlePaste = useCallback(async (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        setUploading(true);
+        const blob = item.getAsFile();
+        const dataUrl = await blobToBase64(blob);
+        await onAddImage(dataUrl, "background");
+        setUploading(false);
+        return;
+      }
+    }
+  }, [onAddImage]);
+
+  // Handle file upload
+  const handleFileUpload = useCallback(async (files) => {
+    const arr = Array.from(files).filter(f => f.type.startsWith("image/"));
+    if (!arr.length) return;
+    setUploading(true);
+    for (const file of arr) {
+      const dataUrl = await blobToBase64(file);
+      await onAddImage(dataUrl, "background");
+    }
+    setUploading(false);
+  }, [onAddImage]);
+
+  // Save image to device
+  const saveImage = (url, filename) => {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename || "booktok-image.jpg";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  return (
+    <div className="fade-in" style={{ padding: "16px", paddingBottom: "100px" }} onPaste={handlePaste}>
+      {/* IMAGES */}
+      <div className="card" style={{ padding: "14px", marginBottom: "12px" }}>
+        <div className="label" style={{ marginBottom: "10px" }}>Images {uploading && <span style={{ color: "var(--accent)", animation: "pulse 1s ease infinite" }}>uploading...</span>}</div>
+
+        {images.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: "8px", marginBottom: "12px" }}>
+            {images.map(img => (
+              <div key={img.id} style={{ position: "relative", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--border)", aspectRatio: "1" }}>
+                <img src={img.thumb || img.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "4px", display: "flex", gap: "4px", background: "linear-gradient(transparent, rgba(0,0,0,0.8))" }}>
+                  <button onClick={() => saveImage(img.url, `booktok-${img.id}.jpg`)} className="btn" style={{ flex: 1, padding: "4px", fontSize: "10px", background: "rgba(255,255,255,0.15)", color: "#fff", backdropFilter: "blur(4px)" }}>Save</button>
+                  <button onClick={() => { if (confirm("Remove?")) onRemoveImage(img.id); }} className="btn" style={{ padding: "4px 8px", fontSize: "10px", background: "rgba(255,0,0,0.15)", color: "#f88", backdropFilter: "blur(4px)" }}>×</button>
+                </div>
+                <div style={{ position: "absolute", top: "4px", left: "4px", padding: "1px 6px", borderRadius: "4px", background: "rgba(0,0,0,0.6)", fontSize: "9px", color: "var(--text2)", fontFamily: "var(--mono)" }}>{img.label}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: "8px" }}>
+          <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={e => handleFileUpload(e.target.files)} />
+          <button onClick={() => fileInputRef.current?.click()} className="btn" style={{ flex: 1, padding: "12px", fontSize: "12px", background: "var(--bg)", color: "var(--text3)", border: "1px dashed var(--border2)" }}>
+            Upload Photo
+          </button>
+          <button onClick={async () => {
+            try {
+              const items = await navigator.clipboard.read();
+              for (const item of items) {
+                for (const type of item.types) {
+                  if (type.startsWith("image/")) {
+                    setUploading(true);
+                    const blob = await item.getType(type);
+                    const dataUrl = await blobToBase64(blob);
+                    await onAddImage(dataUrl, "background");
+                    setUploading(false);
+                    return;
+                  }
+                }
+              }
+              alert("No image found in clipboard. Copy an image first.");
+            } catch { alert("Clipboard access denied. Try Ctrl/Cmd+V instead."); }
+          }} className="btn" style={{ padding: "12px", fontSize: "12px", background: "var(--bg)", color: "var(--text3)", border: "1px dashed var(--border2)" }}>
+            Paste
+          </button>
+        </div>
+        <div style={{ fontSize: "10px", color: "var(--text4)", fontFamily: "var(--mono)", marginTop: "6px", textAlign: "center" }}>Tip: Ctrl/Cmd+V anywhere on this page to paste images</div>
+      </div>
+
+      {/* HOOK */}
+      <div className="card" style={{ padding: "14px", marginBottom: "12px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+          <span className="label">Hook</span>
+          <button onClick={() => copyText(post.hook, "hook")} className="btn" style={{ padding: "3px 10px", fontSize: "10px", background: "transparent", color: copied === "hook" ? "var(--posted)" : "var(--text3)", border: `1px solid ${copied === "hook" ? "#1a2e1a" : "var(--border)"}` }}>{copied === "hook" ? "✓ Copied" : "Copy"}</button>
+        </div>
+        <textarea value={post.hook || ""} onChange={e => onUpdate({ hook: e.target.value })} placeholder="When the enemies are starting to become lovers—" className="input" style={{ height: "70px", resize: "vertical", fontSize: "15px", fontWeight: 600, lineHeight: 1.4 }} />
+      </div>
+
+      {/* CAPTION */}
+      <div className="card" style={{ padding: "14px", marginBottom: "12px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+          <span className="label">Caption</span>
+          <div style={{ display: "flex", gap: "6px" }}>
+            {authorHashtags && (
+              <button onClick={() => { const current = post.caption || ""; if (!current.includes(authorHashtags)) onUpdate({ caption: current + "\n\n" + authorHashtags }); }} className="btn" style={{ padding: "3px 10px", fontSize: "10px", background: "transparent", color: "var(--text3)", border: "1px solid var(--border)" }}>+ Hashtags</button>
+            )}
+            <button onClick={() => copyText(post.caption, "caption")} className="btn" style={{ padding: "3px 10px", fontSize: "10px", background: "transparent", color: copied === "caption" ? "var(--posted)" : "var(--text3)", border: `1px solid ${copied === "caption" ? "#1a2e1a" : "var(--border)"}` }}>{copied === "caption" ? "✓ Copied" : "Copy"}</button>
+          </div>
+        </div>
+        <textarea value={post.caption || ""} onChange={e => onUpdate({ caption: e.target.value })} placeholder={"The way he chose her over everything\n📚 : Book Title by Author\n— enemies to lovers\n— arranged marriage"} className="input" style={{ height: "140px", resize: "vertical", fontSize: "13px", lineHeight: 1.6 }} />
+      </div>
+
+      {/* QUICK COPY ALL */}
+      <button onClick={copyAll} className="btn" style={{ width: "100%", padding: "14px", fontSize: "14px", fontWeight: 700, background: copied === "all" ? "#0f1a0f" : "#fff", color: copied === "all" ? "var(--posted)" : "#000", border: copied === "all" ? "1px solid #1a2e1a" : "none", marginBottom: "12px" }}>
+        {copied === "all" ? "✓ Copied Hook + Caption + Hashtags" : "Copy All"}
+      </button>
+
+      {/* SCHEDULE & NOTES */}
+      <div className="card" style={{ padding: "14px", marginBottom: "12px" }}>
+        <span className="label" style={{ display: "block", marginBottom: "10px" }}>Schedule & Notes</span>
+        <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: "10px", color: "var(--text4)", marginBottom: "4px" }}>Date</div>
+            <input type="date" value={post.scheduledDate || ""} onChange={e => onUpdate({ scheduledDate: e.target.value })} className="input" style={{ fontSize: "13px", fontFamily: "var(--mono)", colorScheme: "dark" }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: "10px", color: "var(--text4)", marginBottom: "4px" }}>Time</div>
+            <input type="time" value={post.scheduledTime || ""} onChange={e => onUpdate({ scheduledTime: e.target.value })} className="input" style={{ fontSize: "13px", fontFamily: "var(--mono)", colorScheme: "dark" }} />
+          </div>
+        </div>
+        <textarea value={post.notes || ""} onChange={e => onUpdate({ notes: e.target.value })} placeholder="Notes (e.g. engage 5 min before posting, use trending sound...)" className="input" style={{ height: "60px", resize: "vertical", fontSize: "12px" }} />
+      </div>
+
+      {/* CONTEXT (collapsible) */}
+      <details style={{ marginBottom: "12px" }}>
+        <summary className="label" style={{ cursor: "pointer", padding: "10px 14px", background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: "10px" }}>Context (from BookTok Studio)</summary>
+        <div className="card" style={{ padding: "14px", borderTop: "none", borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
+          <textarea value={post.context || ""} onChange={e => onUpdate({ context: e.target.value })} placeholder="Scene context for reference..." className="input" style={{ height: "80px", resize: "vertical", fontSize: "12px" }} />
+        </div>
+      </details>
+
+      {/* STATUS */}
+      <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+        {STATUS_ORDER.map(s => (
+          <button key={s} onClick={() => onUpdate({ status: s })} className="btn" style={{
+            flex: 1, padding: "10px", fontSize: "12px", fontWeight: 600, fontFamily: "var(--mono)", textTransform: "capitalize",
+            border: `1px solid ${STATUS_COLORS[s].border}`,
+            background: post.status === s ? STATUS_COLORS[s].bg : "transparent",
+            color: post.status === s ? STATUS_COLORS[s].color : "var(--text4)",
+            opacity: post.status === s ? 1 : 0.5,
+          }}>{s}</button>
+        ))}
+      </div>
+
+      {/* DELETE */}
+      <button onClick={onDelete} className="btn" style={{ width: "100%", padding: "12px", fontSize: "12px", background: "transparent", color: "#e55", border: "1px solid #331a1a" }}>Delete Post</button>
+    </div>
+  );
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+  </script>
+</body>
+</html>
