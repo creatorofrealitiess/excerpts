@@ -1,714 +1,1647 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#080808" />
-  <title>BookTok Posts</title>
-  <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiQm9va1RvayBQb3N0cyIsInNob3J0X25hbWUiOiJCVCBQb3N0cyIsInN0YXJ0X3VybCI6Ii4vIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiIzA4MDgwOCIsInRoZW1lX2NvbG9yIjoiIzA4MDgwOCJ9" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg: #080808; --bg2: #0e0e0e; --bg3: #141414; --border: #1a1a1a; --border2: #252525;
-      --text: #d4d4d4; --text2: #888; --text3: #555; --text4: #333;
-      --re: #f0a5a5; --re-bg: #2a1515; --re-border: #4a2525;
-      --dk: #a5c4f0; --dk-bg: #1f2a3d; --dk-border: #25354a;
-      --pv: #a5f0a5; --pv-bg: #152a15; --pv-border: #254a25;
-      --draft: #888; --ready: #d4c060; --posted: #5cb85c;
-      --accent: #d4c060; --accent-bg: #1a1a0f; --accent-border: #2a2a1a;
-      --font: 'DM Sans', -apple-system, sans-serif; --mono: 'DM Mono', monospace;
-      --safe-b: env(safe-area-inset-bottom, 0px);
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    body { background: var(--bg); color: var(--text); font-family: var(--font); overflow-x: hidden; }
-    input, textarea, select, button { font-family: var(--font); }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes slideUp { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
-    .fade-in { animation: fadeIn 0.3s ease both; }
-    .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; transition: border-color 0.15s; }
-    .card:active { border-color: var(--border2); }
-    .btn { border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
-    .btn:active { transform: scale(0.97); }
-    .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text3); font-family: var(--mono); }
-    .input { width: 100%; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; outline: none; transition: border-color 0.2s; }
-    .input:focus { border-color: var(--border2); }
-    .status-draft { color: var(--draft); background: #1a1a1a; border-color: #2a2a2a; }
-    .status-ready { color: var(--ready); background: var(--accent-bg); border-color: var(--accent-border); }
-    .status-posted { color: var(--posted); background: #0f1a0f; border-color: #1a2e1a; }
-    /* Scrollbar */
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #1a1a1a; border-radius: 2px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>BookTok Post Manager</title>
+<link rel="manifest" href="data:application/json,{}">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-primary: #0a0a0f;
+  --bg-secondary: #13131a;
+  --bg-card: #1a1a24;
+  --bg-elevated: #22222e;
+  --text-primary: #f0f0f5;
+  --text-secondary: #9090a8;
+  --text-muted: #5a5a72;
+  --accent-coral: #ff6b6b;
+  --accent-violet: #8b5cf6;
+  --accent-cyan: #06d6a0;
+  --accent-amber: #fbbf24;
+  --accent-pink: #f472b6;
+  --accent-blue: #60a5fa;
+  --gradient-fire: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 50%, #fbbf24 100%);
+  --gradient-ocean: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --gradient-aurora: linear-gradient(135deg, #06d6a0 0%, #667eea 50%, #f472b6 100%);
+  --gradient-sunset: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  --shadow-glow: 0 0 40px rgba(139, 92, 246, 0.15);
+  --shadow-card: 0 4px 24px rgba(0,0,0,0.3);
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Outfit', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Background noise texture */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Ambient glow blobs */
+.ambient-glow {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.08;
+  pointer-events: none;
+  z-index: 0;
+  animation: float 20s ease-in-out infinite;
+}
+.glow-1 { width: 500px; height: 500px; background: var(--accent-violet); top: -100px; right: -100px; }
+.glow-2 { width: 400px; height: 400px; background: var(--accent-coral); bottom: -50px; left: -50px; animation-delay: -7s; }
+.glow-3 { width: 300px; height: 300px; background: var(--accent-cyan); top: 50%; left: 50%; animation-delay: -14s; }
+
+@keyframes float {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(30px, -30px); }
+  50% { transform: translate(-20px, 20px); }
+  75% { transform: translate(10px, -10px); }
+}
+
+/* ======== AUTH SCREEN ======== */
+.auth-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  background: var(--bg-primary);
+}
+
+.auth-container {
+  width: 90%;
+  max-width: 420px;
+  text-align: center;
+  animation: fadeUp 0.8s ease;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.auth-logo {
+  font-family: 'Syne', sans-serif;
+  font-size: 3rem;
+  font-weight: 800;
+  background: var(--gradient-aurora);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 8px;
+  letter-spacing: -1px;
+}
+
+.auth-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin-bottom: 40px;
+  font-weight: 300;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-input {
+  background: var(--bg-card);
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  color: var(--text-primary);
+  font-family: 'Outfit', sans-serif;
+  font-size: 1rem;
+  outline: none;
+  transition: var(--transition);
+}
+
+.auth-input:focus {
+  border-color: var(--accent-violet);
+  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
+}
+
+.auth-input::placeholder { color: var(--text-muted); }
+
+.auth-btn {
+  background: var(--gradient-aurora);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 16px;
+  color: white;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  margin-top: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(139, 92, 246, 0.3); }
+.auth-btn:active { transform: translateY(0); }
+
+.auth-toggle {
+  margin-top: 20px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.auth-toggle span {
+  color: var(--accent-violet);
+  cursor: pointer;
+  font-weight: 500;
+  transition: var(--transition);
+}
+
+.auth-toggle span:hover { color: var(--accent-pink); }
+
+.auth-error {
+  color: var(--accent-coral);
+  font-size: 0.85rem;
+  margin-top: 8px;
+  min-height: 20px;
+}
+
+/* ======== MAIN APP ======== */
+.app {
+  display: none;
+  position: relative;
+  z-index: 1;
+  padding-bottom: 100px;
+}
+
+.app.active { display: block; }
+
+/* Top bar */
+.top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(10, 10, 15, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.top-bar-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 1.3rem;
+  background: var(--gradient-aurora);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.top-bar-back {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: var(--transition);
+}
+
+.top-bar-back:hover { color: var(--text-primary); }
+
+.top-bar-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--bg-card);
+  border: 1px solid rgba(255,255,255,0.06);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+  font-size: 1.1rem;
+}
+
+.icon-btn:hover { background: var(--bg-elevated); color: var(--text-primary); }
+
+/* ======== DASHBOARD ======== */
+.dashboard { padding: 24px 20px; }
+
+.section-label {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  padding-left: 4px;
+}
+
+.project-group { margin-bottom: 32px; }
+
+.project-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.project-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.project-name {
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--text-primary);
+}
+
+.author-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.author-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: var(--radius-md);
+  padding: 18px;
+  cursor: pointer;
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.author-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  opacity: 0;
+  transition: var(--transition);
+}
+
+.author-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-card);
+  border-color: rgba(255,255,255,0.08);
+}
+
+.author-card:hover::before { opacity: 1; }
+
+.author-card[data-project="RE"]::before { background: var(--gradient-fire); }
+.author-card[data-project="DK"]::before { background: var(--gradient-ocean); }
+.author-card[data-project="PV"]::before { background: var(--gradient-sunset); }
+
+.author-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 1rem;
+  color: white;
+  margin-bottom: 12px;
+}
+
+.author-card[data-project="RE"] .author-avatar { background: var(--gradient-fire); }
+.author-card[data-project="DK"] .author-avatar { background: var(--gradient-ocean); }
+.author-card[data-project="PV"] .author-avatar { background: var(--gradient-sunset); }
+
+.author-handle {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+}
+
+.author-stats {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.stat-chip {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text-secondary);
+}
+
+.stat-chip.drafts { color: var(--accent-amber); background: rgba(251, 191, 36, 0.1); }
+.stat-chip.ready { color: var(--accent-cyan); background: rgba(6, 214, 160, 0.1); }
+.stat-chip.posted { color: var(--accent-violet); background: rgba(139, 92, 246, 0.1); }
+
+/* ======== AUTHOR VIEW ======== */
+.author-view { display: none; padding: 20px; }
+.author-view.active { display: block; }
+
+.author-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.author-hero-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 1.3rem;
+  color: white;
+}
+
+.author-hero-info h2 {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 1.4rem;
+}
+
+.author-hero-info p {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-top: 2px;
+}
+
+/* Filter tabs */
+.filter-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+.filter-tab {
+  padding: 8px 18px;
+  border-radius: 30px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--transition);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border: 1px solid rgba(255,255,255,0.04);
+}
+
+.filter-tab.active {
+  background: var(--accent-violet);
+  color: white;
+  border-color: var(--accent-violet);
+}
+
+.filter-tab:hover:not(.active) {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+/* Post cards */
+.post-feed { display: flex; flex-direction: column; gap: 14px; }
+
+.post-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: var(--radius-md);
+  padding: 18px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.post-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card);
+  border-color: rgba(255,255,255,0.08);
+}
+
+.post-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.post-card-hook {
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.4;
+  flex: 1;
+  margin-right: 12px;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.status-badge.draft { background: rgba(251, 191, 36, 0.12); color: var(--accent-amber); }
+.status-badge.ready { background: rgba(6, 214, 160, 0.12); color: var(--accent-cyan); }
+.status-badge.posted { background: rgba(139, 92, 246, 0.12); color: var(--accent-violet); }
+
+.post-card-preview {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.post-card-images {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  overflow-x: auto;
+}
+
+.post-card-thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--bg-elevated);
+}
+
+.post-card-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.post-card-tag {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.03);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+/* FAB */
+.fab {
+  position: fixed;
+  bottom: 28px;
+  right: 20px;
+  width: 60px;
+  height: 60px;
+  border-radius: 20px;
+  background: var(--gradient-aurora);
+  border: none;
+  color: white;
+  font-size: 1.8rem;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.35);
+  transition: var(--transition);
+  z-index: 50;
+}
+
+.fab:hover { transform: translateY(-3px) scale(1.05); }
+.fab.show { display: flex; }
+
+/* ======== POST EDITOR ======== */
+.post-editor { display: none; padding: 20px; }
+.post-editor.active { display: block; }
+
+.editor-section {
+  margin-bottom: 24px;
+}
+
+.editor-label {
+  font-family: 'Syne', sans-serif;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-input, .editor-textarea {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1.5px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  color: var(--text-primary);
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.95rem;
+  outline: none;
+  transition: var(--transition);
+  resize: none;
+}
+
+.editor-input:focus, .editor-textarea:focus {
+  border-color: var(--accent-violet);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.08);
+}
+
+.editor-textarea { min-height: 100px; line-height: 1.6; }
+.editor-textarea.small { min-height: 60px; }
+
+/* Image upload area */
+.image-zone {
+  border: 2px dashed rgba(255,255,255,0.08);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  text-align: center;
+  transition: var(--transition);
+  cursor: pointer;
+  position: relative;
+}
+
+.image-zone:hover, .image-zone.drag-over {
+  border-color: var(--accent-violet);
+  background: rgba(139, 92, 246, 0.04);
+}
+
+.image-zone-icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+}
+
+.image-zone-text {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.image-zone-text span {
+  color: var(--accent-violet);
+  font-weight: 600;
+}
+
+.image-gallery {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.image-item {
+  position: relative;
+  width: 90px;
+  height: 90px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid rgba(255,255,255,0.06);
+}
+
+.image-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-item-actions {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  gap: 4px;
+}
+
+.img-action-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(8px);
+  border: none;
+  color: white;
+  font-size: 0.7rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.img-action-btn:hover { background: var(--accent-coral); }
+.img-action-btn.save:hover { background: var(--accent-cyan); }
+
+/* Copy buttons */
+.copy-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.copy-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  color: var(--accent-violet);
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+
+.copy-btn:hover { background: rgba(139, 92, 246, 0.2); }
+.copy-btn.copied { background: rgba(6, 214, 160, 0.15); color: var(--accent-cyan); border-color: rgba(6, 214, 160, 0.3); }
+
+.copy-all-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--gradient-aurora);
+  border: none;
+  color: white;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.copy-all-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(139, 92, 246, 0.3); }
+
+/* Hashtag bank */
+.hashtag-bank {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.hashtag-chip {
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-secondary);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.hashtag-chip:hover { background: rgba(139, 92, 246, 0.1); color: var(--accent-violet); border-color: rgba(139, 92, 246, 0.2); }
+.hashtag-chip.selected { background: rgba(139, 92, 246, 0.15); color: var(--accent-violet); border-color: rgba(139, 92, 246, 0.3); }
+
+/* Status selector */
+.status-selector {
+  display: flex;
+  gap: 8px;
+}
+
+.status-option {
+  flex: 1;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  border: 2px solid rgba(255,255,255,0.06);
+  color: var(--text-secondary);
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  text-align: center;
+}
+
+.status-option:hover { border-color: rgba(255,255,255,0.12); }
+.status-option.active[data-status="draft"] { border-color: var(--accent-amber); color: var(--accent-amber); background: rgba(251, 191, 36, 0.08); }
+.status-option.active[data-status="ready"] { border-color: var(--accent-cyan); color: var(--accent-cyan); background: rgba(6, 214, 160, 0.08); }
+.status-option.active[data-status="posted"] { border-color: var(--accent-violet); color: var(--accent-violet); background: rgba(139, 92, 246, 0.08); }
+
+/* Schedule */
+.schedule-row {
+  display: flex;
+  gap: 10px;
+}
+
+.schedule-row input {
+  flex: 1;
+}
+
+/* Save bar */
+.save-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 20px;
+  background: rgba(10, 10, 15, 0.9);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  gap: 10px;
+  z-index: 50;
+}
+
+.save-btn {
+  flex: 1;
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  border: none;
+}
+
+.save-btn.primary {
+  background: var(--gradient-aurora);
+  color: white;
+}
+
+.save-btn.primary:hover { box-shadow: 0 6px 20px rgba(139, 92, 246, 0.3); }
+
+.save-btn.danger {
+  background: rgba(255, 107, 107, 0.1);
+  color: var(--accent-coral);
+  border: 1px solid rgba(255, 107, 107, 0.2);
+}
+
+.save-btn.danger:hover { background: rgba(255, 107, 107, 0.2); }
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  padding: 12px 24px;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 500;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.08);
+  opacity: 0;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  z-index: 200;
+}
+
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+}
+
+.empty-state-icon { font-size: 3rem; margin-bottom: 12px; }
+.empty-state-text { font-size: 1rem; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary); }
+.empty-state-sub { font-size: 0.85rem; }
+
+/* Collapsible */
+.collapsible-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  padding: 12px 0;
+}
+
+.collapsible-header .chevron {
+  transition: var(--transition);
+  color: var(--text-muted);
+}
+
+.collapsible-header.open .chevron { transform: rotate(180deg); }
+
+.collapsible-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.collapsible-body.open { max-height: 500px; }
+
+/* Loading spinner */
+.spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255,255,255,0.2);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Responsive */
+@media (max-width: 400px) {
+  .author-grid { grid-template-columns: 1fr; }
+  .auth-logo { font-size: 2.4rem; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+</style>
 </head>
 <body>
-  <div id="root"></div>
-  <script type="text/babel">
-    const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
-// ============================================================
-// FIREBASE CONFIG — User fills this in on first launch
-// ============================================================
-const STORAGE_KEY = "btpm_firebase_config";
-const PASSPHRASE_KEY = "btpm_passphrase";
+<div class="ambient-glow glow-1"></div>
+<div class="ambient-glow glow-2"></div>
+<div class="ambient-glow glow-3"></div>
 
-const PROJECT_MAP = {
-  RE: { label: "RE", color: "#f0a5a5", bg: "#2a1515", border: "#4a2525", authors: ["Veda Rose", "Lila Blair", "Zara Blaze", "Liv Raven"] },
-  DK: { label: "DK", color: "#a5c4f0", bg: "#1f2a3d", border: "#25354a", authors: ["Lys Kane", "Lexi Asher"] },
-  PV: { label: "PV", color: "#a5f0a5", bg: "#152a15", border: "#254a25", authors: ["Lara Hart"] },
+<!-- AUTH SCREEN -->
+<div class="auth-screen" id="authScreen">
+  <div class="auth-container">
+    <div class="auth-logo">PostFlow</div>
+    <div class="auth-subtitle">BookTok Post Manager</div>
+    <div class="auth-form" id="authForm">
+      <input class="auth-input" type="email" id="authEmail" placeholder="Email" autocomplete="email">
+      <input class="auth-input" type="password" id="authPassword" placeholder="Password" autocomplete="current-password">
+      <button class="auth-btn" id="authBtn" onclick="handleAuth()">Sign In</button>
+      <div class="auth-toggle" id="authToggle">
+        Don't have an account? <span onclick="toggleAuthMode()">Sign up</span>
+      </div>
+      <div class="auth-error" id="authError"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div class="app" id="app">
+  <!-- Top Bar -->
+  <div class="top-bar">
+    <div class="top-bar-back" id="backBtn" onclick="goBack()">
+      <span>&#8592;</span> Back
+    </div>
+    <div class="top-bar-title" id="topTitle">PostFlow</div>
+    <div class="top-bar-actions">
+      <div class="icon-btn" onclick="signOut()" title="Sign out">&#x2192;</div>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div class="dashboard" id="dashboard"></div>
+
+  <!-- Author View -->
+  <div class="author-view" id="authorView"></div>
+
+  <!-- Post Editor -->
+  <div class="post-editor" id="postEditor"></div>
+
+  <!-- FAB -->
+  <button class="fab" id="fab" onclick="newPost()">+</button>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ========================================== -->
+<!-- FIREBASE + APP LOGIC -->
+<!-- ========================================== -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+
+<script>
+// =============================================
+// FIREBASE CONFIG — REPLACE WITH YOUR VALUES
+// =============================================
+// Paste your Firebase config object here (from Firebase Console > Project Settings > Your apps)
+const firebaseConfig = {
+  apiKey: "AIzaSyDMsL5kyKDSVakihwvgrgtOqFlVObDehpw",
+  authDomain: "booktok-46e7a.firebaseapp.com",
+  databaseURL: "https://booktok-46e7a-default-rtdb.firebaseio.com",
+  projectId: "booktok-46e7a",
+  storageBucket: "booktok-46e7a.firebasestorage.app",
+  messagingSenderId: "749806717436",
+  appId: "1:749806717436:web:672e38f0bc13532fb74a79"
 };
 
-const STATUS_COLORS = { draft: { color: "#888", bg: "#1a1a1a", border: "#2a2a2a" }, ready: { color: "#d4c060", bg: "#1a1a0f", border: "#2a2a1a" }, posted: { color: "#5cb85c", bg: "#0f1a0f", border: "#1a2e1a" } };
-const STATUS_ORDER = ["draft", "ready", "posted"];
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+const storage = firebase.storage();
 
-function generateId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+// =============================================
+// AUTHORS CONFIG
+// =============================================
+const AUTHORS = [
+  { id: 'lysbookish', handle: '@lysbookish', initials: 'LB', project: 'RE', name: 'Lys' },
+  { id: 'vedarosebooks', handle: '@vedarosebooks', initials: 'VR', project: 'RE', name: 'Veda' },
+  { id: 'lexiasherbooks', handle: '@lexiasherbooks', initials: 'LA', project: 'RE', name: 'Lexi' },
+  { id: 'zaralibrary', handle: '@zaralibrary', initials: 'ZL', project: 'DK', name: 'Zara' },
+  { id: 'lilablairbooks', handle: '@lilablairbooks', initials: 'LB', project: 'DK', name: 'Lila' },
+  { id: 'larahartbooks', handle: '@larahartbooks', initials: 'LH', project: 'PV', name: 'Lara' },
+  { id: 'livravenbooks', handle: '@livravenbooks', initials: 'LR', project: 'PV', name: 'Liv' },
+];
 
-// ============================================================
-// IMAGE UTILITIES
-// ============================================================
-function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
+const PROJECTS = {
+  RE: { name: 'Project RE', color: '#ff6b6b' },
+  DK: { name: 'Project DK', color: '#667eea' },
+  PV: { name: 'Project PV', color: '#f093fb' },
+};
+
+// Suggested hashtag bank per niche
+const HASHTAG_BANK = [
+  '#booktok', '#bookish', '#bookrecommendations', '#booklover', '#bookworm',
+  '#darkromance', '#spicybooks', '#romancebooks', '#booktokfyp', '#reading',
+  '#newrelease', '#kindleunlimited', '#bookseries', '#mustread', '#bookobsessed',
+  '#enemies2lovers', '#morallygrey', '#alphamale', '#possessivehero', '#forcedproximity',
+  '#kindlereads', '#bookstoread', '#5starread', '#bookclub', '#readersoftiktok',
+  '#romantasy', '#fantasyromance', '#paranormalromance', '#reverseharems', '#whychoose'
+];
+
+// =============================================
+// STATE
+// =============================================
+let currentUser = null;
+let currentAuthor = null;
+let currentPostId = null;
+let postsCache = {};
+let isSignUp = false;
+let currentFilter = 'all';
+
+// =============================================
+// AUTH
+// =============================================
+function toggleAuthMode() {
+  isSignUp = !isSignUp;
+  document.getElementById('authBtn').textContent = isSignUp ? 'Create Account' : 'Sign In';
+  document.getElementById('authToggle').innerHTML = isSignUp
+    ? 'Already have an account? <span onclick="toggleAuthMode()">Sign in</span>'
+    : 'Don\'t have an account? <span onclick="toggleAuthMode()">Sign up</span>';
+  document.getElementById('authError').textContent = '';
+}
+
+async function handleAuth() {
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const errorEl = document.getElementById('authError');
+  const btn = document.getElementById('authBtn');
+
+  if (!email || !password) { errorEl.textContent = 'Please fill in all fields'; return; }
+
+  btn.innerHTML = '<span class="spinner"></span>';
+  btn.disabled = true;
+
+  try {
+    if (isSignUp) {
+      await auth.createUserWithEmailAndPassword(email, password);
+    } else {
+      await auth.signInWithEmailAndPassword(email, password);
+    }
+  } catch (err) {
+    let msg = 'Something went wrong';
+    if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') msg = 'Invalid email or password';
+    else if (err.code === 'auth/email-already-in-use') msg = 'Email already registered';
+    else if (err.code === 'auth/weak-password') msg = 'Password must be at least 6 characters';
+    else if (err.code === 'auth/invalid-email') msg = 'Invalid email address';
+    else if (err.code === 'auth/invalid-credential') msg = 'Invalid email or password';
+    errorEl.textContent = msg;
+    btn.textContent = isSignUp ? 'Create Account' : 'Sign In';
+    btn.disabled = false;
+  }
+}
+
+auth.onAuthStateChanged(user => {
+  if (user) {
+    currentUser = user;
+    document.getElementById('authScreen').style.display = 'none';
+    document.getElementById('app').classList.add('active');
+    loadDashboard();
+  } else {
+    currentUser = null;
+    document.getElementById('authScreen').style.display = 'flex';
+    document.getElementById('app').classList.remove('active');
+    document.getElementById('authBtn').textContent = isSignUp ? 'Create Account' : 'Sign In';
+    document.getElementById('authBtn').disabled = false;
+  }
+});
+
+function signOut() { auth.signOut(); }
+
+// =============================================
+// NAVIGATION
+// =============================================
+let navStack = ['dashboard'];
+
+function navigate(view) {
+  navStack.push(view);
+  updateView();
+}
+
+function goBack() {
+  if (navStack.length > 1) navStack.pop();
+  const current = navStack[navStack.length - 1];
+  if (current === 'dashboard') {
+    currentAuthor = null;
+    currentPostId = null;
+  } else if (current === 'author') {
+    currentPostId = null;
+  }
+  updateView();
+}
+
+function updateView() {
+  const current = navStack[navStack.length - 1];
+  const dash = document.getElementById('dashboard');
+  const authorView = document.getElementById('authorView');
+  const editor = document.getElementById('postEditor');
+  const backBtn = document.getElementById('backBtn');
+  const fab = document.getElementById('fab');
+  const title = document.getElementById('topTitle');
+
+  dash.style.display = 'none';
+  authorView.style.display = 'none';
+  authorView.classList.remove('active');
+  editor.style.display = 'none';
+  editor.classList.remove('active');
+  backBtn.style.display = 'none';
+  fab.classList.remove('show');
+
+  if (current === 'dashboard') {
+    dash.style.display = 'block';
+    title.textContent = 'PostFlow';
+    loadDashboard();
+  } else if (current === 'author') {
+    authorView.style.display = 'block';
+    authorView.classList.add('active');
+    backBtn.style.display = 'flex';
+    fab.classList.add('show');
+    title.textContent = currentAuthor.name;
+    loadAuthorView();
+  } else if (current === 'editor') {
+    editor.style.display = 'block';
+    editor.classList.add('active');
+    backBtn.style.display = 'flex';
+    title.textContent = currentPostId ? 'Edit Post' : 'New Post';
+    loadEditor();
+  }
+}
+
+// =============================================
+// DASHBOARD
+// =============================================
+function loadDashboard() {
+  if (!currentUser) return;
+  const dash = document.getElementById('dashboard');
+
+  const grouped = {};
+  for (const a of AUTHORS) {
+    if (!grouped[a.project]) grouped[a.project] = [];
+    grouped[a.project].push(a);
+  }
+
+  let html = '<div class="section-label">Your Accounts</div>';
+
+  for (const [proj, authors] of Object.entries(grouped)) {
+    html += `
+      <div class="project-group">
+        <div class="project-header">
+          <div class="project-dot" style="background:${PROJECTS[proj].color}"></div>
+          <div class="project-name">${PROJECTS[proj].name}</div>
+        </div>
+        <div class="author-grid">
+    `;
+    for (const a of authors) {
+      html += `
+        <div class="author-card" data-project="${a.project}" onclick="openAuthor('${a.id}')">
+          <div class="author-avatar">${a.initials}</div>
+          <div class="author-handle">${a.handle}</div>
+          <div class="author-stats" id="stats-${a.id}">
+            <div class="stat-chip drafts">—</div>
+            <div class="stat-chip ready">—</div>
+          </div>
+        </div>
+      `;
+    }
+    html += '</div></div>';
+  }
+
+  dash.innerHTML = html;
+
+  // Load counts
+  for (const a of AUTHORS) {
+    loadAuthorCounts(a);
+  }
+}
+
+function loadAuthorCounts(author) {
+  db.ref(`users/${currentUser.uid}/posts/${author.id}`).once('value', snap => {
+    const posts = snap.val() || {};
+    let drafts = 0, ready = 0, posted = 0;
+    for (const p of Object.values(posts)) {
+      if (p.status === 'draft') drafts++;
+      else if (p.status === 'ready') ready++;
+      else if (p.status === 'posted') posted++;
+    }
+    const el = document.getElementById(`stats-${author.id}`);
+    if (el) {
+      el.innerHTML = `
+        <div class="stat-chip drafts">${drafts} draft${drafts !== 1 ? 's' : ''}</div>
+        <div class="stat-chip ready">${ready} ready</div>
+        ${posted ? `<div class="stat-chip posted">${posted} posted</div>` : ''}
+      `;
+    }
+  });
+}
+
+// =============================================
+// AUTHOR VIEW
+// =============================================
+function openAuthor(authorId) {
+  currentAuthor = AUTHORS.find(a => a.id === authorId);
+  navigate('author');
+}
+
+function loadAuthorView() {
+  const view = document.getElementById('authorView');
+  const a = currentAuthor;
+
+  let gradClass = a.project === 'RE' ? 'var(--gradient-fire)' : a.project === 'DK' ? 'var(--gradient-ocean)' : 'var(--gradient-sunset)';
+
+  let html = `
+    <div class="author-hero">
+      <div class="author-hero-avatar" style="background:${gradClass}">${a.initials}</div>
+      <div class="author-hero-info">
+        <h2>${a.handle}</h2>
+        <p>${PROJECTS[a.project].name}</p>
+      </div>
+    </div>
+    <div class="filter-tabs">
+      <div class="filter-tab ${currentFilter === 'all' ? 'active' : ''}" onclick="filterPosts('all')">All</div>
+      <div class="filter-tab ${currentFilter === 'draft' ? 'active' : ''}" onclick="filterPosts('draft')">Drafts</div>
+      <div class="filter-tab ${currentFilter === 'ready' ? 'active' : ''}" onclick="filterPosts('ready')">Ready</div>
+      <div class="filter-tab ${currentFilter === 'posted' ? 'active' : ''}" onclick="filterPosts('posted')">Posted</div>
+    </div>
+    <div class="post-feed" id="postFeed">
+      <div style="text-align:center;padding:40px;color:var(--text-muted)"><span class="spinner"></span></div>
+    </div>
+  `;
+
+  view.innerHTML = html;
+  loadPosts();
+}
+
+function filterPosts(filter) {
+  currentFilter = filter;
+  loadAuthorView();
+}
+
+function loadPosts() {
+  const ref = db.ref(`users/${currentUser.uid}/posts/${currentAuthor.id}`);
+  ref.once('value', snap => {
+    const data = snap.val() || {};
+    postsCache = data;
+    renderPosts(data);
+  });
+}
+
+function renderPosts(data) {
+  const feed = document.getElementById('postFeed');
+  const posts = Object.entries(data)
+    .map(([id, p]) => ({ id, ...p }))
+    .filter(p => currentFilter === 'all' || p.status === currentFilter)
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+  if (posts.length === 0) {
+    feed.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">&#128214;</div>
+        <div class="empty-state-text">No posts yet</div>
+        <div class="empty-state-sub">Tap + to create your first post</div>
+      </div>
+    `;
+    return;
+  }
+
+  feed.innerHTML = posts.map(p => `
+    <div class="post-card" onclick="openPost('${p.id}')">
+      <div class="post-card-header">
+        <div class="post-card-hook">${escHtml(p.hook || 'Untitled post')}</div>
+        <div class="status-badge ${p.status || 'draft'}">${p.status || 'draft'}</div>
+      </div>
+      ${p.caption ? `<div class="post-card-preview">${escHtml(p.caption)}</div>` : ''}
+      ${p.images && p.images.length ? `
+        <div class="post-card-images">
+          ${p.images.slice(0, 4).map(img => `<img class="post-card-thumb" src="${img}" alt="">`).join('')}
+          ${p.images.length > 4 ? `<div class="post-card-thumb" style="display:flex;align-items:center;justify-content:center;font-size:0.8rem;color:var(--text-muted)">+${p.images.length - 4}</div>` : ''}
+        </div>
+      ` : ''}
+      <div class="post-card-meta">
+        ${p.scheduledDate ? `<span class="post-card-tag">&#128197; ${p.scheduledDate}</span>` : ''}
+        ${p.hashtags ? `<span class="post-card-tag"># ${(p.hashtags.match(/#/g) || []).length} tags</span>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+// =============================================
+// POST EDITOR
+// =============================================
+function newPost() {
+  currentPostId = null;
+  navigate('editor');
+}
+
+function openPost(postId) {
+  currentPostId = postId;
+  navigate('editor');
+}
+
+function loadEditor() {
+  const editor = document.getElementById('postEditor');
+  const post = currentPostId && postsCache[currentPostId] ? postsCache[currentPostId] : {};
+
+  const images = post.images || [];
+  const selectedTags = (post.hashtags || '').split(/\s+/).filter(t => t.startsWith('#'));
+
+  let html = `
+    <!-- Images -->
+    <div class="editor-section">
+      <div class="editor-label">&#128247; Slides</div>
+      <div class="image-zone" id="imageZone" onclick="document.getElementById('imageInput').click()">
+        <div class="image-zone-icon">&#128194;</div>
+        <div class="image-zone-text">Drop images, <span>browse</span>, or paste (Ctrl+V)</div>
+        <input type="file" id="imageInput" multiple accept="image/*" style="display:none" onchange="handleImageUpload(this.files)">
+      </div>
+      <div class="image-gallery" id="imageGallery">
+        ${images.map((img, i) => imageItemHtml(img, i)).join('')}
+      </div>
+    </div>
+
+    <!-- Hook -->
+    <div class="editor-section">
+      <div class="copy-row">
+        <div class="editor-label" style="flex:1;margin-bottom:0">&#127a5; Hook</div>
+        <button class="copy-btn" onclick="copyField('hookInput', this)">Copy</button>
+      </div>
+      <textarea class="editor-textarea small" id="hookInput" placeholder="The opening hook for your caption...">${escHtml(post.hook || '')}</textarea>
+    </div>
+
+    <!-- Caption -->
+    <div class="editor-section">
+      <div class="copy-row">
+        <div class="editor-label" style="flex:1;margin-bottom:0">&#128172; Caption</div>
+        <button class="copy-btn" onclick="copyField('captionInput', this)">Copy</button>
+      </div>
+      <textarea class="editor-textarea" id="captionInput" placeholder="Full caption text...">${escHtml(post.caption || '')}</textarea>
+    </div>
+
+    <!-- Hashtags (per post) -->
+    <div class="editor-section">
+      <div class="copy-row">
+        <div class="editor-label" style="flex:1;margin-bottom:0">&#x23; Hashtags</div>
+        <button class="copy-btn" onclick="copyField('hashtagInput', this)">Copy</button>
+      </div>
+      <textarea class="editor-textarea small" id="hashtagInput" placeholder="#booktok #darkromance #spicybooks...">${escHtml(post.hashtags || '')}</textarea>
+      <div class="hashtag-bank" id="hashtagBank">
+        ${HASHTAG_BANK.map(tag => `
+          <div class="hashtag-chip ${selectedTags.includes(tag) ? 'selected' : ''}" onclick="toggleHashtag(this, '${tag}')">${tag}</div>
+        `).join('')}
+      </div>
+    </div>
+
+    <!-- Copy All -->
+    <div class="editor-section">
+      <button class="copy-all-btn" onclick="copyAll()">&#128203; Copy All (Hook + Caption + Hashtags)</button>
+    </div>
+
+    <!-- Schedule -->
+    <div class="editor-section">
+      <div class="editor-label">&#128197; Schedule</div>
+      <div class="schedule-row">
+        <input class="editor-input" type="date" id="scheduleDate" value="${post.scheduledDate || ''}">
+        <input class="editor-input" type="time" id="scheduleTime" value="${post.scheduledTime || ''}">
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div class="editor-section">
+      <div class="editor-label">&#9899; Status</div>
+      <div class="status-selector">
+        <div class="status-option ${(post.status || 'draft') === 'draft' ? 'active' : ''}" data-status="draft" onclick="selectStatus(this, 'draft')">Draft</div>
+        <div class="status-option ${post.status === 'ready' ? 'active' : ''}" data-status="ready" onclick="selectStatus(this, 'ready')">Ready</div>
+        <div class="status-option ${post.status === 'posted' ? 'active' : ''}" data-status="posted" onclick="selectStatus(this, 'posted')">Posted</div>
+      </div>
+    </div>
+
+    <!-- Notes -->
+    <div class="editor-section">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <div class="editor-label" style="margin-bottom:0">&#128221; Notes</div>
+        <span class="chevron">&#9660;</span>
+      </div>
+      <div class="collapsible-body">
+        <textarea class="editor-textarea small" id="notesInput" placeholder="Internal notes, reminders...">${escHtml(post.notes || '')}</textarea>
+      </div>
+    </div>
+
+    <!-- Context -->
+    <div class="editor-section">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <div class="editor-label" style="margin-bottom:0">&#128218; Context</div>
+        <span class="chevron">&#9660;</span>
+      </div>
+      <div class="collapsible-body">
+        <textarea class="editor-textarea small" id="contextInput" placeholder="Book title, chapter, trope, reference info...">${escHtml(post.context || '')}</textarea>
+      </div>
+    </div>
+
+    <div style="height:80px"></div>
+
+    <!-- Save bar -->
+    <div class="save-bar">
+      ${currentPostId ? '<button class="save-btn danger" onclick="deletePost()">Delete</button>' : ''}
+      <button class="save-btn primary" onclick="savePost()">Save</button>
+    </div>
+  `;
+
+  editor.innerHTML = html;
+  setupPasteListener();
+  setupDragDrop();
+}
+
+let editorImages = [];
+
+function setupEditorImages() {
+  const post = currentPostId && postsCache[currentPostId] ? postsCache[currentPostId] : {};
+  editorImages = [...(post.images || [])];
+}
+
+// Call on editor load
+const origLoadEditor = loadEditor;
+loadEditor = function() {
+  const post = currentPostId && postsCache[currentPostId] ? postsCache[currentPostId] : {};
+  editorImages = [...(post.images || [])];
+  origLoadEditor();
+};
+
+function imageItemHtml(src, index) {
+  return `
+    <div class="image-item">
+      <img src="${src}" alt="Slide ${index + 1}">
+      <div class="image-item-actions">
+        <button class="img-action-btn save" onclick="event.stopPropagation(); saveImage(${index})" title="Save">&#8595;</button>
+        <button class="img-action-btn" onclick="event.stopPropagation(); removeImage(${index})" title="Remove">&#10005;</button>
+      </div>
+    </div>
+  `;
+}
+
+function refreshImageGallery() {
+  const gallery = document.getElementById('imageGallery');
+  if (gallery) {
+    gallery.innerHTML = editorImages.map((img, i) => imageItemHtml(img, i)).join('');
+  }
+}
+
+async function handleImageUpload(files) {
+  for (const file of files) {
+    if (!file.type.startsWith('image/')) continue;
+    const dataUrl = await fileToDataUrl(file);
+    editorImages.push(dataUrl);
+  }
+  refreshImageGallery();
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
+    reader.readAsDataURL(file);
   });
 }
 
-async function compressImage(dataUrl, maxWidth = 1200, quality = 0.8) {
-  return new Promise(resolve => {
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(1, maxWidth / img.width);
-      const canvas = document.createElement("canvas");
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", quality));
-    };
-    img.src = dataUrl;
-  });
+function removeImage(index) {
+  editorImages.splice(index, 1);
+  refreshImageGallery();
 }
 
-function makeThumbnail(dataUrl, size = 200) {
-  return new Promise(resolve => {
-    const img = new Image();
-    img.onload = () => {
-      const s = Math.min(size / img.width, size / img.height, 1);
-      const c = document.createElement("canvas");
-      c.width = img.width * s; c.height = img.height * s;
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      resolve(c.toDataURL("image/jpeg", 0.6));
-    };
-    img.src = dataUrl;
-  });
+function saveImage(index) {
+  const link = document.createElement('a');
+  link.href = editorImages[index];
+  link.download = `slide-${index + 1}.png`;
+  link.click();
 }
 
-// ============================================================
-// MAIN APP
-// ============================================================
-function App() {
-  const [firebaseConfig, setFirebaseConfig] = useState(null);
-  const [passphrase, setPassphrase] = useState("");
-  const [db, setDb] = useState(null);
-  const [storage, setStorage] = useState(null);
-  const [configInput, setConfigInput] = useState("");
-  const [passInput, setPassInput] = useState("");
-  const [configError, setConfigError] = useState("");
-  const [initializing, setInitializing] = useState(true);
-
-  // Try to load saved config
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      const savedPass = localStorage.getItem(PASSPHRASE_KEY);
-      if (saved && savedPass) {
-        const config = JSON.parse(saved);
-        initFirebase(config, savedPass);
-      } else {
-        setInitializing(false);
-      }
-    } catch { setInitializing(false); }
-  }, []);
-
-  function initFirebase(config, pass) {
-    try {
-      if (!firebase.apps.length) {
-        firebase.initializeApp(config);
-      }
-      const database = firebase.database();
-      const store = firebase.storage();
-      // Test connection
-      const testRef = database.ref(`users/${pass}/test`);
-      testRef.set({ connected: true, ts: Date.now() }).then(() => {
-        setFirebaseConfig(config);
-        setPassphrase(pass);
-        setDb(database);
-        setStorage(store);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-        localStorage.setItem(PASSPHRASE_KEY, pass);
-        setInitializing(false);
-      }).catch(e => {
-        setConfigError("Firebase connection failed: " + e.message);
-        setInitializing(false);
-      });
-    } catch (e) {
-      setConfigError("Invalid config: " + e.message);
-      setInitializing(false);
-    }
-  }
-
-  function handleConnect() {
-    setConfigError("");
-    try {
-      if (!passInput.trim()) { setConfigError("Enter a passphrase."); return; }
-      let raw = configInput.trim();
-      raw = raw.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
-      raw = raw.replace(/^.*import\s.*$/gm, "");
-      raw = raw.replace(/^.*const\s+\w+\s*=\s*/gm, "");
-      raw = raw.replace(/^.*initializeApp.*$/gm, "");
-      raw = raw.replace(/;\s*$/gm, "");
-      raw = raw.replace(/[\u2018\u2019\u201A\u201B]/g, "'").replace(/[\u201C\u201D\u201E\u201F]/g, '"');
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (!match) throw "no object";
-      let jsonStr = match[0];
-      jsonStr = jsonStr.replace(/([{,]\s*)(\w+)\s*:/g, '$1"$2":');
-      jsonStr = jsonStr.replace(/,\s*([}\]])/g, "$1");
-      const config = JSON.parse(jsonStr);
-      if (!config.apiKey) throw "missing apiKey";
-      initFirebase(config, passInput.trim());
-    } catch(e) { setConfigError("Invalid config. Paste the Firebase config object (or the full code block)."); }
-  }
-
-  function handleDisconnect() {
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(PASSPHRASE_KEY);
-    setFirebaseConfig(null);
-    setPassphrase("");
-    setDb(null);
-    setStorage(null);
-  }
-
-  if (initializing) {
-    return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)" }}>
-      <div style={{ color: "var(--text3)", fontFamily: "var(--mono)", fontSize: "12px", animation: "pulse 1.5s ease infinite" }}>Connecting...</div>
-    </div>;
-  }
-
-  if (!db) {
-    return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)", padding: "24px" }}>
-        <div style={{ maxWidth: "420px", width: "100%" }} className="fade-in">
-          <div style={{ textAlign: "center", marginBottom: "32px" }}>
-            <div style={{ fontSize: "28px", marginBottom: "8px" }}>📖</div>
-            <div style={{ fontSize: "20px", fontWeight: 700, letterSpacing: "-0.5px", marginBottom: "4px" }}>BookTok Posts</div>
-            <div style={{ fontSize: "12px", color: "var(--text3)", fontFamily: "var(--mono)" }}>Connect your Firebase to get started</div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-            <div>
-              <div className="label" style={{ marginBottom: "6px" }}>Firebase Config (JSON)</div>
-              <textarea value={configInput} onChange={e => setConfigInput(e.target.value)} placeholder='Paste the full code block from Firebase — or just the {apiKey:...} object' className="input" style={{ height: "120px", resize: "vertical", fontSize: "11px", fontFamily: "var(--mono)" }} />
-            </div>
-            <div>
-              <div className="label" style={{ marginBottom: "6px" }}>Passphrase <span style={{ textTransform: "none", color: "var(--text4)" }}>(this is your user ID — same on all devices)</span></div>
-              <input value={passInput} onChange={e => setPassInput(e.target.value)} placeholder="Enter a memorable passphrase" className="input" />
-            </div>
-            {configError && <div style={{ padding: "8px 12px", background: "#1a0f0f", border: "1px solid #331a1a", borderRadius: "8px", color: "#e55", fontSize: "12px", fontFamily: "var(--mono)" }}>{configError}</div>}
-            <button onClick={handleConnect} className="btn" style={{ padding: "14px", fontSize: "14px", background: "#fff", color: "#000", width: "100%" }}>Connect</button>
-            <div style={{ fontSize: "11px", color: "var(--text4)", textAlign: "center", lineHeight: 1.6 }}>
-              Create a free Firebase project at <span style={{ color: "var(--text3)" }}>console.firebase.google.com</span>
-              <br />Enable Realtime Database + Storage, then paste the config here.
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return <PostManager db={db} storage={storage} passphrase={passphrase} onDisconnect={handleDisconnect} />;
-}
-
-// ============================================================
-// POST MANAGER
-// ============================================================
-function PostManager({ db, storage, passphrase, onDisconnect }) {
-  const [screen, setScreen] = useState("dashboard"); // dashboard | author | post
-  const [authors, setAuthors] = useState({});
-  const [posts, setPosts] = useState({});
-  const [selectedProject, setSelectedProject] = useState("ALL");
-  const [selectedAuthor, setSelectedAuthor] = useState(null);
-  const [selectedPost, setSelectedPost] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
-
-  const basePath = `users/${passphrase}`;
-
-  // Load all data from Firebase
-  useEffect(() => {
-    const authorsRef = db.ref(`${basePath}/authors`);
-    const postsRef = db.ref(`${basePath}/posts`);
-
-    authorsRef.on("value", snap => {
-      const data = snap.val() || {};
-      setAuthors(data);
-    });
-
-    postsRef.on("value", snap => {
-      const data = snap.val() || {};
-      setPosts(data);
-    });
-
-    // Initialize default authors if empty
-    authorsRef.once("value", snap => {
-      if (!snap.val()) {
-        const defaults = {};
-        Object.entries(PROJECT_MAP).forEach(([proj, info]) => {
-          info.authors.forEach(name => {
-            const id = name.toLowerCase().replace(/\s+/g, "-");
-            defaults[id] = { name, project: proj, hashtags: "", createdAt: Date.now() };
-          });
-        });
-        authorsRef.set(defaults);
-      }
-      setLoading(false);
-    });
-
-    return () => { authorsRef.off(); postsRef.off(); };
-  }, [db, basePath]);
-
-  // CRUD operations
-  const createPost = useCallback((authorId) => {
-    const id = generateId();
-    const post = {
-      authorId,
-      hook: "",
-      caption: "",
-      context: "",
-      notes: "",
-      status: "draft",
-      scheduledDate: "",
-      scheduledTime: "",
-      images: {},
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    db.ref(`${basePath}/posts/${id}`).set(post);
-    return id;
-  }, [db, basePath]);
-
-  const updatePost = useCallback((id, updates) => {
-    db.ref(`${basePath}/posts/${id}`).update({ ...updates, updatedAt: Date.now() });
-  }, [db, basePath]);
-
-  const deletePost = useCallback((id) => {
-    // Also delete images from storage
-    const post = posts[id];
-    if (post?.images) {
-      Object.keys(post.images).forEach(imgId => {
-        storage.ref(`${basePath}/images/${id}/${imgId}`).delete().catch(() => {});
-      });
-    }
-    db.ref(`${basePath}/posts/${id}`).remove();
-    if (selectedPost === id) { setSelectedPost(null); setScreen("author"); }
-  }, [db, storage, basePath, posts, selectedPost]);
-
-  const updateAuthorHashtags = useCallback((authorId, hashtags) => {
-    db.ref(`${basePath}/authors/${authorId}/hashtags`).set(hashtags);
-  }, [db, basePath]);
-
-  const addImageToPost = useCallback(async (postId, dataUrl, label = "background") => {
-    const imgId = generateId();
-    const compressed = await compressImage(dataUrl);
-    const thumb = await makeThumbnail(dataUrl);
-
-    // Upload full image to Firebase Storage
-    const ref = storage.ref(`${basePath}/images/${postId}/${imgId}`);
-    await ref.putString(compressed, "data_url");
-    const url = await ref.getDownloadURL();
-
-    // Save metadata to database
-    db.ref(`${basePath}/posts/${postId}/images/${imgId}`).set({
-      url,
-      thumb,
-      label,
-      createdAt: Date.now(),
-    });
-    return imgId;
-  }, [db, storage, basePath]);
-
-  const removeImageFromPost = useCallback((postId, imgId) => {
-    storage.ref(`${basePath}/images/${postId}/${imgId}`).delete().catch(() => {});
-    db.ref(`${basePath}/posts/${postId}/images/${imgId}`).remove();
-  }, [db, storage, basePath]);
-
-  const cycleStatus = useCallback((postId) => {
-    const current = posts[postId]?.status || "draft";
-    const next = STATUS_ORDER[(STATUS_ORDER.indexOf(current) + 1) % STATUS_ORDER.length];
-    updatePost(postId, { status: next });
-  }, [posts, updatePost]);
-
-  // Derived data
-  const authorList = useMemo(() => {
-    return Object.entries(authors).map(([id, data]) => ({
-      id, ...data,
-      postCount: Object.values(posts).filter(p => p.authorId === id).length,
-      readyCount: Object.values(posts).filter(p => p.authorId === id && p.status === "ready").length,
-      draftCount: Object.values(posts).filter(p => p.authorId === id && p.status === "draft").length,
-    })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [authors, posts]);
-
-  const authorPosts = useMemo(() => {
-    if (!selectedAuthor) return [];
-    return Object.entries(posts)
-      .filter(([_, p]) => p.authorId === selectedAuthor)
-      .map(([id, p]) => ({ id, ...p }))
-      .sort((a, b) => b.createdAt - a.createdAt);
-  }, [posts, selectedAuthor]);
-
-  const currentPost = selectedPost ? { id: selectedPost, ...posts[selectedPost] } : null;
-  const currentAuthor = selectedAuthor ? { id: selectedAuthor, ...authors[selectedAuthor] } : null;
-
-  // Navigation
-  const goToDashboard = () => { setScreen("dashboard"); setSelectedAuthor(null); setSelectedPost(null); };
-  const goToAuthor = (authorId) => { setScreen("author"); setSelectedAuthor(authorId); setSelectedPost(null); };
-  const goToPost = (postId) => { setScreen("post"); setSelectedPost(postId); };
-
-  if (loading) {
-    return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ color: "var(--text3)", fontFamily: "var(--mono)", fontSize: "12px", animation: "pulse 1.5s ease infinite" }}>Loading...</div>
-    </div>;
-  }
-
-  return (
-    <div style={{ minHeight: "100vh", paddingBottom: "calc(60px + var(--safe-b))" }}>
-      {/* HEADER */}
-      <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg2)", position: "sticky", top: 0, zIndex: 40 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          {screen !== "dashboard" && (
-            <button onClick={screen === "post" ? () => goToAuthor(posts[selectedPost]?.authorId) : goToDashboard} className="btn" style={{ padding: "6px 10px", fontSize: "18px", background: "transparent", color: "var(--text3)", lineHeight: 1 }}>←</button>
-          )}
-          <span style={{ fontSize: "15px" }}>📖</span>
-          <span style={{ fontSize: "15px", fontWeight: 700, letterSpacing: "-0.3px" }}>
-            {screen === "dashboard" ? "Posts" : screen === "author" ? currentAuthor?.name : "Edit Post"}
-          </span>
-          {screen === "author" && currentAuthor && (
-            <span style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "1.5px", padding: "2px 8px", borderRadius: "4px", background: PROJECT_MAP[currentAuthor.project]?.bg, color: PROJECT_MAP[currentAuthor.project]?.color, fontFamily: "var(--mono)", border: `1px solid ${PROJECT_MAP[currentAuthor.project]?.border}` }}>{currentAuthor.project}</span>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          {screen === "post" && currentPost && (
-            <button onClick={() => cycleStatus(selectedPost)} className="btn" style={{ padding: "4px 12px", fontSize: "11px", fontWeight: 600, fontFamily: "var(--mono)", border: `1px solid ${STATUS_COLORS[currentPost.status]?.border}`, background: STATUS_COLORS[currentPost.status]?.bg, color: STATUS_COLORS[currentPost.status]?.color }}>{currentPost.status}</button>
-          )}
-          {screen === "dashboard" && (
-            <button onClick={() => setShowSettings(!showSettings)} className="btn" style={{ padding: "6px 10px", fontSize: "14px", background: "transparent", color: "var(--text3)", lineHeight: 1 }}>⚙</button>
-          )}
-        </div>
-      </div>
-
-      {/* SETTINGS DROPDOWN */}
-      {showSettings && screen === "dashboard" && (
-        <div className="fade-in" style={{ padding: "16px", borderBottom: "1px solid var(--border)", background: "var(--bg2)" }}>
-          <button onClick={() => { if (confirm("Disconnect from Firebase? Your data stays safe in the cloud.")) onDisconnect(); }} className="btn" style={{ padding: "10px 16px", fontSize: "12px", background: "#1a0f0f", color: "#e55", border: "1px solid #331a1a", width: "100%" }}>Disconnect Firebase</button>
-        </div>
-      )}
-
-      {/* DASHBOARD */}
-      {screen === "dashboard" && (
-        <div className="fade-in" style={{ padding: "16px" }}>
-          {/* Project filter */}
-          <div style={{ display: "flex", gap: "6px", marginBottom: "20px", overflowX: "auto", paddingBottom: "4px" }}>
-            {["ALL", "RE", "DK", "PV"].map(p => (
-              <button key={p} onClick={() => setSelectedProject(p)} className="btn" style={{
-                padding: "6px 16px", fontSize: "12px", fontWeight: 600, fontFamily: "var(--mono)", whiteSpace: "nowrap",
-                border: `1px solid ${selectedProject === p ? (p === "ALL" ? "var(--border2)" : PROJECT_MAP[p]?.border) : "var(--border)"}`,
-                background: selectedProject === p ? (p === "ALL" ? "var(--bg3)" : PROJECT_MAP[p]?.bg) : "transparent",
-                color: selectedProject === p ? (p === "ALL" ? "var(--text)" : PROJECT_MAP[p]?.color) : "var(--text3)",
-              }}>{p}</button>
-            ))}
-          </div>
-
-          {/* Author cards */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {authorList.filter(a => selectedProject === "ALL" || a.project === selectedProject).map((author, i) => (
-              <div key={author.id} onClick={() => goToAuthor(author.id)} className="card" style={{ padding: "14px 16px", cursor: "pointer", animationDelay: `${i * 0.05}s` }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "1px", padding: "2px 7px", borderRadius: "3px", background: PROJECT_MAP[author.project]?.bg, color: PROJECT_MAP[author.project]?.color, fontFamily: "var(--mono)", border: `1px solid ${PROJECT_MAP[author.project]?.border}` }}>{author.project}</span>
-                    <span style={{ fontSize: "14px", fontWeight: 600 }}>{author.name}</span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    {author.readyCount > 0 && <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "10px", background: "var(--accent-bg)", color: "var(--ready)", fontFamily: "var(--mono)", border: "1px solid var(--accent-border)" }}>{author.readyCount} ready</span>}
-                    {author.draftCount > 0 && <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: "10px", background: "#1a1a1a", color: "var(--text3)", fontFamily: "var(--mono)" }}>{author.draftCount}</span>}
-                    <span style={{ color: "var(--text4)", fontSize: "16px" }}>›</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* AUTHOR VIEW */}
-      {screen === "author" && currentAuthor && (
-        <div className="fade-in" style={{ padding: "16px" }}>
-          {/* Hashtags */}
-          <div className="card" style={{ padding: "12px 14px", marginBottom: "16px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-              <span className="label">Hashtags</span>
-              <button onClick={() => { if (currentAuthor.hashtags) { navigator.clipboard.writeText(currentAuthor.hashtags); } }} className="btn" style={{ padding: "3px 10px", fontSize: "10px", background: "transparent", color: "var(--text3)", border: "1px solid var(--border)" }}>Copy All</button>
-            </div>
-            <textarea value={currentAuthor.hashtags || ""} onChange={e => updateAuthorHashtags(selectedAuthor, e.target.value)} placeholder="#mafiaromance #arrangedmarriage #enemiestolovers #booktok #romancebooks" className="input" style={{ height: "60px", resize: "vertical", fontSize: "12px", fontFamily: "var(--mono)" }} />
-          </div>
-
-          {/* Post cards */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-            <span className="label">{authorPosts.length} Posts</span>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {authorPosts.map((post, i) => {
-              const firstImg = post.images ? Object.values(post.images)[0] : null;
-              const hookPreview = post.hook ? (post.hook.length > 50 ? post.hook.substring(0, 50) + "..." : post.hook) : "No hook yet";
-              return (
-                <div key={post.id} onClick={() => goToPost(post.id)} className="card" style={{ padding: "12px", cursor: "pointer", display: "flex", gap: "12px", alignItems: "center", animationDelay: `${i * 0.04}s` }}>
-                  {firstImg ? (
-                    <img src={firstImg.thumb || firstImg.url} alt="" style={{ width: "52px", height: "52px", borderRadius: "6px", objectFit: "cover", border: "1px solid var(--border)" }} />
-                  ) : (
-                    <div style={{ width: "52px", height: "52px", borderRadius: "6px", background: "var(--bg)", border: "1px dashed var(--border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", opacity: 0.3, flexShrink: 0 }}>📷</div>
-                  )}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: "13px", fontWeight: 500, color: "var(--text)", marginBottom: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{hookPreview}</div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <span style={{ fontSize: "10px", padding: "1px 8px", borderRadius: "8px", fontFamily: "var(--mono)", fontWeight: 600, border: "1px solid", ...STATUS_COLORS[post.status] }}>{post.status}</span>
-                      {post.scheduledDate && <span style={{ fontSize: "10px", color: "var(--text3)", fontFamily: "var(--mono)" }}>{post.scheduledDate}</span>}
-                    </div>
-                  </div>
-                  <span style={{ color: "var(--text4)", fontSize: "16px", flexShrink: 0 }}>›</span>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* FAB */}
-          <button onClick={() => { const id = createPost(selectedAuthor); goToPost(id); }} className="btn" style={{ position: "fixed", bottom: "calc(24px + var(--safe-b))", right: "24px", width: "56px", height: "56px", borderRadius: "50%", background: "#fff", color: "#000", fontSize: "24px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 20px rgba(0,0,0,0.5)", zIndex: 30, lineHeight: 1 }}>+</button>
-        </div>
-      )}
-
-      {/* POST DETAIL */}
-      {screen === "post" && currentPost && (
-        <PostEditor
-          post={currentPost}
-          author={currentAuthor}
-          onUpdate={(updates) => updatePost(selectedPost, updates)}
-          onDelete={() => { if (confirm("Delete this post?")) deletePost(selectedPost); }}
-          onAddImage={(dataUrl, label) => addImageToPost(selectedPost, dataUrl, label)}
-          onRemoveImage={(imgId) => removeImageFromPost(selectedPost, imgId)}
-          onCycleStatus={() => cycleStatus(selectedPost)}
-          authorHashtags={currentAuthor?.hashtags || ""}
-        />
-      )}
-    </div>
-  );
-}
-
-// ============================================================
-// POST EDITOR
-// ============================================================
-function PostEditor({ post, author, onUpdate, onDelete, onAddImage, onRemoveImage, onCycleStatus, authorHashtags }) {
-  const [copied, setCopied] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef(null);
-  const pasteAreaRef = useRef(null);
-
-  const images = post.images ? Object.entries(post.images).map(([id, data]) => ({ id, ...data })) : [];
-
-  const copyText = async (text, field) => {
-    try { await navigator.clipboard.writeText(text); setCopied(field); setTimeout(() => setCopied(""), 1500); } catch {}
-  };
-
-  const copyAll = async () => {
-    const parts = [];
-    if (post.hook) parts.push(post.hook);
-    if (post.caption) parts.push(post.caption);
-    if (authorHashtags) parts.push(authorHashtags);
-    await copyText(parts.join("\n\n"), "all");
-  };
-
-  // Handle paste from clipboard (for desktop)
-  const handlePaste = useCallback(async (e) => {
+function setupPasteListener() {
+  document.onpaste = async (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
     for (const item of items) {
-      if (item.type.startsWith("image/")) {
+      if (item.type.startsWith('image/')) {
         e.preventDefault();
-        setUploading(true);
-        const blob = item.getAsFile();
-        const dataUrl = await blobToBase64(blob);
-        await onAddImage(dataUrl, "background");
-        setUploading(false);
-        return;
+        const file = item.getAsFile();
+        const dataUrl = await fileToDataUrl(file);
+        editorImages.push(dataUrl);
+        refreshImageGallery();
       }
     }
-  }, [onAddImage]);
-
-  // Handle file upload
-  const handleFileUpload = useCallback(async (files) => {
-    const arr = Array.from(files).filter(f => f.type.startsWith("image/"));
-    if (!arr.length) return;
-    setUploading(true);
-    for (const file of arr) {
-      const dataUrl = await blobToBase64(file);
-      await onAddImage(dataUrl, "background");
-    }
-    setUploading(false);
-  }, [onAddImage]);
-
-  // Save image to device
-  const saveImage = (url, filename) => {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename || "booktok-image.jpg";
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
   };
-
-  return (
-    <div className="fade-in" style={{ padding: "16px", paddingBottom: "100px" }} onPaste={handlePaste}>
-      {/* IMAGES */}
-      <div className="card" style={{ padding: "14px", marginBottom: "12px" }}>
-        <div className="label" style={{ marginBottom: "10px" }}>Images {uploading && <span style={{ color: "var(--accent)", animation: "pulse 1s ease infinite" }}>uploading...</span>}</div>
-
-        {images.length > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: "8px", marginBottom: "12px" }}>
-            {images.map(img => (
-              <div key={img.id} style={{ position: "relative", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--border)", aspectRatio: "1" }}>
-                <img src={img.thumb || img.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "4px", display: "flex", gap: "4px", background: "linear-gradient(transparent, rgba(0,0,0,0.8))" }}>
-                  <button onClick={() => saveImage(img.url, `booktok-${img.id}.jpg`)} className="btn" style={{ flex: 1, padding: "4px", fontSize: "10px", background: "rgba(255,255,255,0.15)", color: "#fff", backdropFilter: "blur(4px)" }}>Save</button>
-                  <button onClick={() => { if (confirm("Remove?")) onRemoveImage(img.id); }} className="btn" style={{ padding: "4px 8px", fontSize: "10px", background: "rgba(255,0,0,0.15)", color: "#f88", backdropFilter: "blur(4px)" }}>×</button>
-                </div>
-                <div style={{ position: "absolute", top: "4px", left: "4px", padding: "1px 6px", borderRadius: "4px", background: "rgba(0,0,0,0.6)", fontSize: "9px", color: "var(--text2)", fontFamily: "var(--mono)" }}>{img.label}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div style={{ display: "flex", gap: "8px" }}>
-          <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={e => handleFileUpload(e.target.files)} />
-          <button onClick={() => fileInputRef.current?.click()} className="btn" style={{ flex: 1, padding: "12px", fontSize: "12px", background: "var(--bg)", color: "var(--text3)", border: "1px dashed var(--border2)" }}>
-            Upload Photo
-          </button>
-          <button onClick={async () => {
-            try {
-              const items = await navigator.clipboard.read();
-              for (const item of items) {
-                for (const type of item.types) {
-                  if (type.startsWith("image/")) {
-                    setUploading(true);
-                    const blob = await item.getType(type);
-                    const dataUrl = await blobToBase64(blob);
-                    await onAddImage(dataUrl, "background");
-                    setUploading(false);
-                    return;
-                  }
-                }
-              }
-              alert("No image found in clipboard. Copy an image first.");
-            } catch { alert("Clipboard access denied. Try Ctrl/Cmd+V instead."); }
-          }} className="btn" style={{ padding: "12px", fontSize: "12px", background: "var(--bg)", color: "var(--text3)", border: "1px dashed var(--border2)" }}>
-            Paste
-          </button>
-        </div>
-        <div style={{ fontSize: "10px", color: "var(--text4)", fontFamily: "var(--mono)", marginTop: "6px", textAlign: "center" }}>Tip: Ctrl/Cmd+V anywhere on this page to paste images</div>
-      </div>
-
-      {/* HOOK */}
-      <div className="card" style={{ padding: "14px", marginBottom: "12px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-          <span className="label">Hook</span>
-          <button onClick={() => copyText(post.hook, "hook")} className="btn" style={{ padding: "3px 10px", fontSize: "10px", background: "transparent", color: copied === "hook" ? "var(--posted)" : "var(--text3)", border: `1px solid ${copied === "hook" ? "#1a2e1a" : "var(--border)"}` }}>{copied === "hook" ? "✓ Copied" : "Copy"}</button>
-        </div>
-        <textarea value={post.hook || ""} onChange={e => onUpdate({ hook: e.target.value })} placeholder="When the enemies are starting to become lovers—" className="input" style={{ height: "70px", resize: "vertical", fontSize: "15px", fontWeight: 600, lineHeight: 1.4 }} />
-      </div>
-
-      {/* CAPTION */}
-      <div className="card" style={{ padding: "14px", marginBottom: "12px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-          <span className="label">Caption</span>
-          <div style={{ display: "flex", gap: "6px" }}>
-            {authorHashtags && (
-              <button onClick={() => { const current = post.caption || ""; if (!current.includes(authorHashtags)) onUpdate({ caption: current + "\n\n" + authorHashtags }); }} className="btn" style={{ padding: "3px 10px", fontSize: "10px", background: "transparent", color: "var(--text3)", border: "1px solid var(--border)" }}>+ Hashtags</button>
-            )}
-            <button onClick={() => copyText(post.caption, "caption")} className="btn" style={{ padding: "3px 10px", fontSize: "10px", background: "transparent", color: copied === "caption" ? "var(--posted)" : "var(--text3)", border: `1px solid ${copied === "caption" ? "#1a2e1a" : "var(--border)"}` }}>{copied === "caption" ? "✓ Copied" : "Copy"}</button>
-          </div>
-        </div>
-        <textarea value={post.caption || ""} onChange={e => onUpdate({ caption: e.target.value })} placeholder={"The way he chose her over everything\n📚 : Book Title by Author\n— enemies to lovers\n— arranged marriage"} className="input" style={{ height: "140px", resize: "vertical", fontSize: "13px", lineHeight: 1.6 }} />
-      </div>
-
-      {/* QUICK COPY ALL */}
-      <button onClick={copyAll} className="btn" style={{ width: "100%", padding: "14px", fontSize: "14px", fontWeight: 700, background: copied === "all" ? "#0f1a0f" : "#fff", color: copied === "all" ? "var(--posted)" : "#000", border: copied === "all" ? "1px solid #1a2e1a" : "none", marginBottom: "12px" }}>
-        {copied === "all" ? "✓ Copied Hook + Caption + Hashtags" : "Copy All"}
-      </button>
-
-      {/* SCHEDULE & NOTES */}
-      <div className="card" style={{ padding: "14px", marginBottom: "12px" }}>
-        <span className="label" style={{ display: "block", marginBottom: "10px" }}>Schedule & Notes</span>
-        <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: "10px", color: "var(--text4)", marginBottom: "4px" }}>Date</div>
-            <input type="date" value={post.scheduledDate || ""} onChange={e => onUpdate({ scheduledDate: e.target.value })} className="input" style={{ fontSize: "13px", fontFamily: "var(--mono)", colorScheme: "dark" }} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: "10px", color: "var(--text4)", marginBottom: "4px" }}>Time</div>
-            <input type="time" value={post.scheduledTime || ""} onChange={e => onUpdate({ scheduledTime: e.target.value })} className="input" style={{ fontSize: "13px", fontFamily: "var(--mono)", colorScheme: "dark" }} />
-          </div>
-        </div>
-        <textarea value={post.notes || ""} onChange={e => onUpdate({ notes: e.target.value })} placeholder="Notes (e.g. engage 5 min before posting, use trending sound...)" className="input" style={{ height: "60px", resize: "vertical", fontSize: "12px" }} />
-      </div>
-
-      {/* CONTEXT (collapsible) */}
-      <details style={{ marginBottom: "12px" }}>
-        <summary className="label" style={{ cursor: "pointer", padding: "10px 14px", background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: "10px" }}>Context (from BookTok Studio)</summary>
-        <div className="card" style={{ padding: "14px", borderTop: "none", borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
-          <textarea value={post.context || ""} onChange={e => onUpdate({ context: e.target.value })} placeholder="Scene context for reference..." className="input" style={{ height: "80px", resize: "vertical", fontSize: "12px" }} />
-        </div>
-      </details>
-
-      {/* STATUS */}
-      <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
-        {STATUS_ORDER.map(s => (
-          <button key={s} onClick={() => onUpdate({ status: s })} className="btn" style={{
-            flex: 1, padding: "10px", fontSize: "12px", fontWeight: 600, fontFamily: "var(--mono)", textTransform: "capitalize",
-            border: `1px solid ${STATUS_COLORS[s].border}`,
-            background: post.status === s ? STATUS_COLORS[s].bg : "transparent",
-            color: post.status === s ? STATUS_COLORS[s].color : "var(--text4)",
-            opacity: post.status === s ? 1 : 0.5,
-          }}>{s}</button>
-        ))}
-      </div>
-
-      {/* DELETE */}
-      <button onClick={onDelete} className="btn" style={{ width: "100%", padding: "12px", fontSize: "12px", background: "transparent", color: "#e55", border: "1px solid #331a1a" }}>Delete Post</button>
-    </div>
-  );
 }
 
-// ============================================================
-// RENDER
-// ============================================================
-const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(<App />);
-  </script>
+function setupDragDrop() {
+  const zone = document.getElementById('imageZone');
+  if (!zone) return;
+  zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => { zone.classList.remove('drag-over'); });
+  zone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    await handleImageUpload(e.dataTransfer.files);
+  });
+}
+
+// Hashtag toggling
+function toggleHashtag(chip, tag) {
+  const input = document.getElementById('hashtagInput');
+  const current = input.value.trim();
+  const tags = current.split(/\s+/).filter(t => t.startsWith('#'));
+
+  if (tags.includes(tag)) {
+    // Remove
+    const newTags = tags.filter(t => t !== tag);
+    input.value = newTags.join(' ');
+    chip.classList.remove('selected');
+  } else {
+    // Add
+    input.value = current ? current + ' ' + tag : tag;
+    chip.classList.add('selected');
+  }
+}
+
+// Status
+let selectedStatus = 'draft';
+function selectStatus(el, status) {
+  selectedStatus = status;
+  document.querySelectorAll('.status-option').forEach(o => o.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// Collapsible
+function toggleCollapsible(header) {
+  header.classList.toggle('open');
+  const body = header.nextElementSibling;
+  body.classList.toggle('open');
+}
+
+// Copy
+function copyField(fieldId, btn) {
+  const el = document.getElementById(fieldId);
+  if (!el) return;
+  navigator.clipboard.writeText(el.value).then(() => {
+    btn.classList.add('copied');
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.classList.remove('copied'); btn.textContent = 'Copy'; }, 1500);
+  });
+}
+
+function copyAll() {
+  const hook = document.getElementById('hookInput')?.value || '';
+  const caption = document.getElementById('captionInput')?.value || '';
+  const hashtags = document.getElementById('hashtagInput')?.value || '';
+  const combined = [hook, caption, hashtags].filter(Boolean).join('\n\n');
+  navigator.clipboard.writeText(combined).then(() => {
+    showToast('Copied hook + caption + hashtags!');
+  });
+}
+
+// =============================================
+// SAVE / DELETE
+// =============================================
+async function savePost() {
+  if (!currentUser || !currentAuthor) return;
+
+  const postData = {
+    hook: document.getElementById('hookInput')?.value || '',
+    caption: document.getElementById('captionInput')?.value || '',
+    hashtags: document.getElementById('hashtagInput')?.value || '',
+    scheduledDate: document.getElementById('scheduleDate')?.value || '',
+    scheduledTime: document.getElementById('scheduleTime')?.value || '',
+    status: selectedStatus,
+    notes: document.getElementById('notesInput')?.value || '',
+    context: document.getElementById('contextInput')?.value || '',
+    images: editorImages,
+    updatedAt: Date.now(),
+  };
+
+  const postId = currentPostId || db.ref().push().key;
+  const path = `users/${currentUser.uid}/posts/${currentAuthor.id}/${postId}`;
+
+  try {
+    await db.ref(path).set(postData);
+    postsCache[postId] = postData;
+    currentPostId = postId;
+    showToast('Saved!');
+  } catch (err) {
+    showToast('Error saving: ' + err.message);
+  }
+}
+
+async function deletePost() {
+  if (!currentUser || !currentAuthor || !currentPostId) return;
+  if (!confirm('Delete this post?')) return;
+
+  try {
+    await db.ref(`users/${currentUser.uid}/posts/${currentAuthor.id}/${currentPostId}`).remove();
+    delete postsCache[currentPostId];
+    showToast('Post deleted');
+    goBack();
+  } catch (err) {
+    showToast('Error deleting: ' + err.message);
+  }
+}
+
+// =============================================
+// TOAST
+// =============================================
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+// =============================================
+// UTILITIES
+// =============================================
+function escHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// Init status on editor load
+const origLoadEditor2 = loadEditor;
+loadEditor = function() {
+  origLoadEditor2();
+  const post = currentPostId && postsCache[currentPostId] ? postsCache[currentPostId] : {};
+  selectedStatus = post.status || 'draft';
+};
+
+// PWA-like: prevent scroll bounce
+document.body.addEventListener('touchmove', function(e) {}, { passive: true });
+</script>
 </body>
 </html>
