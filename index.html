@@ -171,7 +171,7 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:var(--bg);color:v
 .task-modal-save{background:var(--accent);color:var(--txtW)}
 .task-modal-save:hover{background:var(--accent-h)}
 /* Tap zone */
-.task-tap-zone{padding:20px;text-align:center;cursor:pointer;color:var(--txt3);font-size:.82rem;border-radius:var(--r-s);transition:var(--tr);margin-top:4px}
+.task-tap-zone{padding:10px;text-align:center;cursor:pointer;color:var(--txt3);font-size:.72rem;border-radius:var(--r-s);transition:var(--tr)}
 .task-tap-zone:hover{background:var(--bg-hover);color:var(--txt2)}
 .task-sub-body{max-height:0;overflow:hidden;transition:max-height .3s ease}
 .task-sub-body.open{max-height:2000px}
@@ -325,7 +325,7 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:var(--bg);color:v
     <h3>New Task</h3>
     <div class="task-modal-field">
       <label>Task</label>
-      <input type="text" id="tmTask" placeholder="e.g. Post Bratva's Bride for Lys">
+      <input type="text" id="tmTask" placeholder="Bratva's Captive Bride by Lys Kane">
     </div>
     <div class="task-modal-row">
       <div class="task-modal-field">
@@ -423,9 +423,9 @@ TASK_CATS.forEach(cat=>{const catTasks=tasks.filter(t=>t.category===cat);const p
 h+=`<div class="task-cat"><div class="task-cat-hd open" onclick="togCat(this)"><div class="task-cat-title">${cat} <span class="task-cat-count">${pending.length}</span></div><div class="task-cat-arr">&#9660;</div></div><div class="task-cat-body open">`;
 
 PROJ_KEYS.forEach(pk=>{const subTasks=pending.filter(t=>t.project===pk);
-h+=`<div class="task-sub"><div class="task-sub-hd open proj-${pk.toLowerCase()}" onclick="togSub(this)"><div class="task-sub-dot" style="background:${PROJ[pk].color}"></div><div class="task-sub-nm">${PROJ[pk].name}</div><span class="task-sub-arr">&#9660;</span></div><div class="task-sub-body open">`;
+h+=`<div class="task-sub"><div class="task-sub-hd proj-${pk.toLowerCase()}" onclick="togSub(this)"><div class="task-sub-dot" style="background:${PROJ[pk].color}"></div><div class="task-sub-nm">${PROJ[pk].name}</div><span class="task-sub-arr">&#9660;</span></div><div class="task-sub-body">`;
 subTasks.forEach(t=>{const dueClass=t.dueDate?(t.dueDate<todayStr?'overdue':t.dueDate===todayStr?'today-due':'future'):'';h+=taskItemH(t,dueClass)});
-h+=`<div class="task-tap-zone" onclick="openTaskModal('${cat}','${pk}')">+ tap to add task</div></div></div>`});
+h+=`<div class="task-tap-zone" onclick="openTaskModal('${cat}','${pk}')">+ tap to add</div></div></div>`});
 
 if(done.length){h+=`<div class="task-completed-hd" onclick="togCompleted(this)">&#9662; Completed (${done.length})</div><div class="task-completed-body">`;done.forEach(t=>{const dueClass=t.dueDate?(t.dueDate<todayStr?'overdue':t.dueDate===todayStr?'today-due':'future'):'';h+=taskItemH(t,dueClass)});h+='</div>'}
 h+='</div></div>'});
