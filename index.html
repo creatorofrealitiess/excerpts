@@ -180,9 +180,21 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:var(--bg);color:v
 .task-date-hd.overdue-hd{color:#dc3545}
 .task-date-hd.today-hd{color:var(--ready)}
 /* Task calendar */
-.tcal-day-tasks{display:flex;flex-direction:column;gap:1px}
-.tcal-item{font-size:.58rem;padding:2px 4px;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default;font-weight:500}
-.tcal-item.tcal-done{opacity:.4;text-decoration:line-through}
+.tcal-day-tasks{display:flex;flex-direction:column;gap:2px}
+.tcal-cat-row{display:flex;align-items:center;gap:3px;font-size:.55rem;font-weight:600;padding:1px 3px;border-radius:3px;color:var(--txt2)}
+.tcal-cat-label{font-size:.5rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--txt3);opacity:.7;width:10px;flex-shrink:0}
+.tcal-authors{display:flex;flex-wrap:wrap;gap:2px}
+.tcal-author{padding:0px 3px;border-radius:2px;font-size:.52rem;font-weight:600;line-height:1.4}
+.tcal-author.tcal-done{opacity:.35;text-decoration:line-through}
+/* Task swipe/context menu */
+.task-item{position:relative;overflow:hidden}
+.task-item.swiping{transition:transform .15s ease}
+.task-archive-btn{position:absolute;right:0;top:0;bottom:0;width:80px;background:var(--accent);color:white;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:600;transform:translateX(80px);transition:transform .15s ease}
+.task-item.swiped .task-archive-btn{transform:translateX(0)}
+.task-ctx-menu{position:fixed;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-s);box-shadow:var(--sh-l);z-index:300;padding:4px 0;display:none}
+.task-ctx-menu.show{display:block}
+.task-ctx-opt{padding:10px 18px;font-size:.85rem;cursor:pointer;transition:var(--tr);white-space:nowrap}
+.task-ctx-opt:hover{background:var(--bg-hover)}
 .task-sub-body{max-height:0;overflow:hidden;transition:max-height .3s ease}
 .task-sub-body.open{max-height:2000px}
 /* Task items */
@@ -332,6 +344,10 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:var(--bg);color:v
 <div class="toast" id="toast"></div>
 
 <!-- Task Modal -->
+<div class="task-ctx-menu" id="taskCtx">
+  <div class="task-ctx-opt" onclick="archiveTask()">&#9745; Move to Completed</div>
+  <div class="task-ctx-opt" onclick="deleteCtxTask()" style="color:#dc3545">&#10005; Delete</div>
+</div>
 <div class="task-modal-overlay" id="taskModal" onclick="if(event.target===this)closeTaskModal()">
   <div class="task-modal">
     <h3>New Task</h3>
@@ -430,9 +446,9 @@ function loadTasks(){if(!user)return;db.ref(`users/${user.uid}/tasks2`).on('valu
 
 function renderTasks(){const el=document.getElementById('pgTask');const todayStr=new Date().toISOString().split('T')[0];
 TASK_CATS.forEach(cat=>{if(openCats[cat]===undefined)openCats[cat]=true;PROJ_KEYS.forEach(pk=>{const k=cat+'-'+pk;if(openSubs[k]===undefined)openSubs[k]=false})});
-let h=`<div class="sec-hd"><div><div class="sec-t">Tasks</div><div class="sec-st">${tasks.filter(t=>!t.done).length} pending</div></div><button class="task-hd-add" onclick="openTaskModal()">+ Add Task</button></div>`;
+let h=`<div class="sec-hd"><div><div class="sec-t">Tasks</div><div class="sec-st">${tasks.filter(t=>!t.archived&&!t.done).length} pending</div></div><button class="task-hd-add" onclick="openTaskModal()">+ Add Task</button></div>`;
 
-TASK_CATS.forEach(cat=>{const catTasks=tasks.filter(t=>t.category===cat);const pending=catTasks.filter(t=>!t.done);const done=catTasks.filter(t=>t.done);const catOpen=openCats[cat];
+TASK_CATS.forEach(cat=>{const catTasks=tasks.filter(t=>t.category===cat);const pending=catTasks.filter(t=>!t.archived);const done=catTasks.filter(t=>t.archived);const catOpen=openCats[cat];
 h+=`<div class="task-cat"><div class="task-cat-hd ${catOpen?'open':''}" onclick="togCat2('${cat}',this)"><div class="task-cat-title">${cat} <span class="task-cat-count">${pending.length}</span></div><div class="task-cat-arr">&#9660;</div></div><div class="task-cat-body ${catOpen?'open':''}">`;
 
 PROJ_KEYS.forEach(pk=>{const subTasks=pending.filter(t=>t.project===pk).sort((a,b)=>{if(!a.dueDate&&!b.dueDate)return 0;if(!a.dueDate)return 1;if(!b.dueDate)return-1;return a.dueDate.localeCompare(b.dueDate)});
@@ -456,25 +472,30 @@ el.innerHTML=h}
 function formatDate(ds){const d=new Date(ds+'T00:00:00');const opts={month:'short',day:'numeric'};return d.toLocaleDateString('en-US',opts)}
 
 // TASK CALENDAR
+const AUTHOR_NAMES=['Lys','Lexi','Zara','Liv','Lila','Veda','Lara'];
+function getAuthorFromTask(text){for(const n of AUTHOR_NAMES){if(text.toLowerCase().includes(n.toLowerCase()))return n}return text.substring(0,6)}
 let tcalMo=new Date().getMonth(),tcalYr=new Date().getFullYear();
 function renderTaskCal(){const el=document.getElementById('pgTaskCal');const mos=['January','February','March','April','May','June','July','August','September','October','November','December'];const dys=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];const todayStr=new Date().toISOString().split('T')[0];
 const fd=new Date(tcalYr,tcalMo,1).getDay(),dim=new Date(tcalYr,tcalMo+1,0).getDate(),pd=new Date(tcalYr,tcalMo,0).getDate(),today=new Date();
 let cdh='',dc=1,nc=1;const tc=Math.ceil((fd+dim)/7)*7;
 for(let i=0;i<tc;i++){let dn,oth=false,ds='';if(i<fd){dn=pd-fd+i+1;oth=true;const pm=tcalMo===0?11:tcalMo-1,py=tcalMo===0?tcalYr-1:tcalYr;ds=`${py}-${String(pm+1).padStart(2,'0')}-${String(dn).padStart(2,'0')}`}else if(dc>dim){dn=nc++;oth=true;const nm=tcalMo===11?0:tcalMo+1,ny=tcalMo===11?tcalYr+1:tcalYr;ds=`${ny}-${String(nm+1).padStart(2,'0')}-${String(dn).padStart(2,'0')}`}else{dn=dc++;ds=`${tcalYr}-${String(tcalMo+1).padStart(2,'0')}-${String(dn).padStart(2,'0')}`}
 const ist=!oth&&dn===today.getDate()&&tcalMo===today.getMonth()&&tcalYr===today.getFullYear();
-const dayTasks=tasks.filter(t=>t.dueDate===ds);
+const dayTasks=tasks.filter(t=>t.dueDate===ds&&!t.archived);
+// Group by category
 let itemsH='';
-dayTasks.forEach(t=>{const projColor=PROJ[t.project]?.color||'#999';itemsH+=`<div class="tcal-item ${t.done?'tcal-done':''}" style="background:${projColor}15;color:${projColor}">${esc(t.text).substring(0,18)}</div>`});
-cdh+=`<div class="cal-day ${oth?'oth':''} ${ist?'today':''}" onclick="openTaskModal()"><div class="cal-dn">${dn}</div><div class="tcal-day-tasks">${itemsH}</div></div>`}
+const cats={};dayTasks.forEach(t=>{if(!cats[t.category])cats[t.category]=[];const author=getAuthorFromTask(t.text);if(!cats[t.category].find(x=>x.author===author&&x.done===!!t.done))cats[t.category].push({author,project:t.project,done:!!t.done})});
+const catLabels={Batch:'B',Draft:'D',Post:'P'};
+for(const[cat,authors]of Object.entries(cats)){itemsH+=`<div class="tcal-cat-row"><span class="tcal-cat-label">${catLabels[cat]||cat[0]}</span><div class="tcal-authors">${authors.map(a=>{const c=PROJ[a.project]?.color||'#999';return`<span class="tcal-author ${a.done?'tcal-done':''}" style="background:${c}15;color:${c}">${a.author}</span>`}).join('')}</div></div>`}
+cdh+=`<div class="cal-day ${oth?'oth':''} ${ist?'today':''}"><div class="cal-dn">${dn}</div><div class="tcal-day-tasks">${itemsH}</div></div>`}
 
 el.innerHTML=`<div class="sec-hd"><div class="sec-t">Planner</div><button class="task-hd-add" onclick="openTaskModal()">+ Add Task</button></div>
 <div class="cal-hd"><div class="cal-nav"><button class="cal-nb" onclick="chTcMo(-1)">&#8249;</button><div class="cal-mo">${mos[tcalMo]} ${tcalYr}</div><button class="cal-nb" onclick="chTcMo(1)">&#8250;</button></div><button class="cal-today" onclick="goTcTd()">Today</button></div>
 <div class="cal-grid"><div class="cal-wk">${dys.map(d=>`<div class="cal-wd">${d}</div>`).join('')}</div><div class="cal-days">${cdh}</div></div>
-<div class="cal-legend"><div class="leg-i"><div class="leg-d" style="background:var(--re)"></div>RE</div><div class="leg-i"><div class="leg-d" style="background:var(--dk)"></div>DK</div><div class="leg-i"><div class="leg-d" style="background:var(--pv)"></div>PV</div></div>`}
+<div class="cal-legend"><div class="leg-i"><span style="font-size:.6rem;font-weight:700;color:var(--txt3);margin-right:2px">B</span>Batch</div><div class="leg-i"><span style="font-size:.6rem;font-weight:700;color:var(--txt3);margin-right:2px">D</span>Draft</div><div class="leg-i"><span style="font-size:.6rem;font-weight:700;color:var(--txt3);margin-right:2px">P</span>Post</div><div style="width:8px"></div><div class="leg-i"><div class="leg-d" style="background:var(--re)"></div>RE</div><div class="leg-i"><div class="leg-d" style="background:var(--dk)"></div>DK</div><div class="leg-i"><div class="leg-d" style="background:var(--pv)"></div>PV</div></div>`}
 function chTcMo(d){tcalMo+=d;if(tcalMo>11){tcalMo=0;tcalYr++}if(tcalMo<0){tcalMo=11;tcalYr--}renderTaskCal()}
 function goTcTd(){const t=new Date();tcalMo=t.getMonth();tcalYr=t.getFullYear();renderTaskCal()}
 
-function taskItemH(t,dc){return`<div class="task-item ${t.done?'done':''}"><div class="task-chk ${t.done?'done':''}" onclick="togTask('${t.id}')">${t.done?'&#10003;':''}</div><div class="task-body"><div class="task-txt">${esc(t.text)}</div>${t.dueDate?`<div class="task-due ${dc}">${t.dueDate}</div>`:''}</div><div class="task-del" onclick="delTask('${t.id}')">&#10005;</div></div>`}
+function taskItemH(t,dc){return`<div class="task-item ${t.done?'done':''}" oncontextmenu="showTaskCtx(event,'${t.id}')" ontouchstart="touchStart(event,'${t.id}')" ontouchmove="touchMove(event)" ontouchend="touchEnd(event,'${t.id}')"><div class="task-chk ${t.done?'done':''}" onclick="togTask('${t.id}')">${t.done?'&#10003;':''}</div><div class="task-body"><div class="task-txt">${esc(t.text)}</div>${t.dueDate?`<div class="task-due ${dc}">${t.dueDate}</div>`:''}</div><div class="task-del" onclick="delTask('${t.id}')">&#10005;</div><div class="task-archive-btn" onclick="archiveTaskById('${t.id}')">Archive</div></div>`}
 
 function addTask2(cat,proj,input){const text=input.value.trim();if(!text||!user)return;const dateInput=input.parentElement.querySelector('.task-add-date');const dueDate=dateInput?dateInput.value:'';const id=db.ref().push().key;db.ref(`users/${user.uid}/tasks2/${id}`).set({text,done:false,category:cat,project:proj,dueDate,createdAt:Date.now()});input.value='';if(dateInput)dateInput.value=''}
 function openTaskModal(cat,proj){document.getElementById('tmCat').value=cat||'Batch';document.getElementById('tmProj').value=proj||'RE';document.getElementById('tmTask').value='';document.getElementById('tmDate').value='';document.getElementById('taskModal').classList.add('show');setTimeout(()=>document.getElementById('tmTask').focus(),100)}
@@ -482,6 +503,17 @@ function closeTaskModal(){document.getElementById('taskModal').classList.remove(
 function saveTaskModal(){const text=document.getElementById('tmTask').value.trim();if(!text||!user)return;const cat=document.getElementById('tmCat').value;const proj=document.getElementById('tmProj').value;const dueDate=document.getElementById('tmDate').value;const id=db.ref().push().key;openCats[cat]=true;openSubs[cat+'-'+proj]=true;db.ref(`users/${user.uid}/tasks2/${id}`).set({text,done:false,category:cat,project:proj,dueDate,createdAt:Date.now()});closeTaskModal();toast('Task added')}
 function togTask(id){const t=tasks.find(x=>x.id===id);if(t&&user)db.ref(`users/${user.uid}/tasks2/${id}/done`).set(!t.done)}
 function delTask(id){if(user)db.ref(`users/${user.uid}/tasks2/${id}`).remove()}
+let ctxTaskId=null;
+function showTaskCtx(e,id){e.preventDefault();ctxTaskId=id;const ctx=document.getElementById('taskCtx');ctx.style.left=Math.min(e.clientX,window.innerWidth-160)+'px';ctx.style.top=Math.min(e.clientY,window.innerHeight-80)+'px';ctx.classList.add('show');setTimeout(()=>document.addEventListener('click',hideTaskCtx,{once:true}),10)}
+function hideTaskCtx(){document.getElementById('taskCtx').classList.remove('show')}
+function archiveTask(){if(ctxTaskId&&user){db.ref(`users/${user.uid}/tasks2/${ctxTaskId}/archived`).set(true);toast('Moved to completed')}hideTaskCtx()}
+function archiveTaskById(id){if(user){db.ref(`users/${user.uid}/tasks2/${id}/archived`).set(true);toast('Moved to completed')}}
+function deleteCtxTask(){if(ctxTaskId&&user){db.ref(`users/${user.uid}/tasks2/${ctxTaskId}`).remove();toast('Deleted')}hideTaskCtx()}
+// Touch swipe for mobile
+let touchStartX=0,touchTaskId=null,touchEl=null;
+function touchStart(e,id){touchStartX=e.touches[0].clientX;touchTaskId=id;touchEl=e.currentTarget}
+function touchMove(e){if(!touchEl)return;const dx=touchStartX-e.touches[0].clientX;if(dx>50){touchEl.style.transform=`translateX(-80px)`;touchEl.classList.add('swiped')}else if(dx<10){touchEl.style.transform='';touchEl.classList.remove('swiped')}}
+function touchEnd(e,id){if(touchEl&&touchEl.classList.contains('swiped')){/* keep swiped open */}else if(touchEl){touchEl.style.transform=''}touchEl=null}
 function togCat2(cat,hd){openCats[cat]=!openCats[cat];hd.classList.toggle('open');hd.nextElementSibling.classList.toggle('open')}
 function togSub2(key,hd){openSubs[key]=!openSubs[key];hd.classList.toggle('open');hd.nextElementSibling.classList.toggle('open')}
 function togCompleted(hd){hd.nextElementSibling.classList.toggle('open')}
