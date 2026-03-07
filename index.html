@@ -85,9 +85,13 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:var(--bg);color:v
 .cnt-pill.draft{background:var(--draft-bg);color:var(--draft)}.cnt-pill.ready{background:var(--ready-bg);color:var(--ready)}.cnt-pill.posted{background:var(--posted-bg);color:var(--posted)}
 .acc-arrow{color:var(--txt3);font-size:1.1rem;flex-shrink:0}
 /* PFP upload */
-.pfp-upload{position:relative}
+.pfp-upload{position:relative;cursor:pointer}
 .pfp-upload input{position:absolute;inset:0;opacity:0;cursor:pointer}
-.pfp-badge{position:absolute;bottom:-2px;right:-2px;width:16px;height:16px;border-radius:50%;background:var(--accent);color:white;font-size:.6rem;display:flex;align-items:center;justify-content:center;border:2px solid var(--white)}
+.auth-big-av.editable{cursor:pointer;position:relative;transition:var(--tr)}
+.auth-big-av.editable:hover{opacity:.8}
+.auth-big-av.editable::after{content:'&#9998;';position:absolute;bottom:-2px;right:-2px;width:18px;height:18px;border-radius:50%;background:var(--accent);color:white;font-size:.6rem;display:flex;align-items:center;justify-content:center;border:2px solid var(--white)}
+.pfp-edit-wrap{position:relative;cursor:pointer}
+.pfp-edit-badge{position:absolute;bottom:-2px;right:-2px;width:18px;height:18px;border-radius:50%;background:var(--accent);color:white;font-size:.6rem;display:flex;align-items:center;justify-content:center;border:2px solid var(--white)}
 
 /* CALENDAR */
 .cal-filter{display:flex;gap:6px;overflow-x:auto;margin-bottom:14px;padding-bottom:2px;-webkit-overflow-scrolling:touch}
@@ -130,11 +134,12 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:var(--bg);color:v
 .task-cat-count{font-size:.72rem;font-weight:600;color:var(--txt3);background:var(--bg);padding:2px 8px;border-radius:10px}
 .task-cat-arr{font-size:.8rem;color:var(--txt3);transition:var(--tr)}
 .task-cat-hd.open .task-cat-arr{transform:rotate(180deg)}
-.task-cat-body{max-height:0;overflow:hidden;transition:max-height .35s ease}
-.task-cat-body.open{max-height:3000px}
+.task-cat-body{max-height:0;overflow:hidden;transition:max-height .35s ease;padding:0 10px}
+.task-cat-body.open{max-height:3000px;padding:8px 10px 10px}
 /* Sub-category */
-.task-sub{border-top:1px solid var(--border-lt)}
-.task-sub-hd{display:flex;align-items:center;gap:8px;padding:10px 16px 10px 28px;cursor:pointer;transition:var(--tr);user-select:none}
+.task-sub{margin-bottom:8px;border-radius:var(--r-s);border:1px solid var(--border-lt);background:var(--bg-hover);overflow:hidden}
+.task-sub:last-of-type{margin-bottom:4px}
+.task-sub-hd{display:flex;align-items:center;gap:8px;padding:10px 16px 10px 20px;cursor:pointer;transition:var(--tr);user-select:none}
 .task-sub-hd:hover{background:var(--bg-hover)}
 .task-sub-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .task-sub-nm{font-size:.78rem;font-weight:600;color:var(--txt2)}
@@ -143,7 +148,7 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:var(--bg);color:v
 .task-sub-body{max-height:0;overflow:hidden;transition:max-height .3s ease}
 .task-sub-body.open{max-height:2000px}
 /* Task items */
-.task-item{display:flex;align-items:flex-start;gap:10px;padding:10px 16px 10px 40px;border-top:1px solid var(--border-lt);transition:var(--tr)}
+.task-item{display:flex;align-items:flex-start;gap:10px;padding:10px 16px 10px 32px;border-top:1px solid var(--border-lt);transition:var(--tr)}
 .task-item:hover{background:var(--bg-hover)}
 .task-chk{width:18px;height:18px;border-radius:5px;border:2px solid var(--border);cursor:pointer;flex-shrink:0;margin-top:1px;transition:var(--tr);display:flex;align-items:center;justify-content:center;background:var(--white)}
 .task-chk:hover{border-color:var(--accent)}
@@ -321,13 +326,13 @@ function swTab(t){curTab=t;curAuthor=null;curPostId=null;navStack=[];document.qu
 
 function showAuth2(aid){curAuthor=AUTHORS.find(a=>a.id===aid);curFilter='all';navStack.push('author');document.querySelectorAll('.page,.ed-page').forEach(p=>p.classList.remove('active'));document.getElementById('pgAuth').classList.add('active');document.getElementById('navBack').style.display='flex';document.getElementById('navBrand').style.display='none';document.getElementById('navTitle').style.display='block';document.getElementById('navTitle').textContent=curAuthor.name;document.getElementById('fab').classList.add('show');renderAuthView()}
 
-function showEd(pid,authId){if(authId&&!curAuthor)curAuthor=AUTHORS.find(a=>a.id===authId);curPostId=pid||null;navStack.push('editor');document.querySelectorAll('.page,.ed-page').forEach(p=>p.classList.remove('active'));document.getElementById('pgEdit').classList.add('active');document.getElementById('navBack').style.display='flex';document.getElementById('navBrand').style.display='none';document.getElementById('navTitle').style.display='block';document.getElementById('navTitle').textContent=pid?'Edit Post':'New Post';document.getElementById('fab').classList.remove('show');document.getElementById('btabs').style.display='none';renderEd()}
+function showEd(pid,authId){if(authId){curAuthor=AUTHORS.find(a=>a.id===authId);postsCache=allPosts[authId]||{}}curPostId=pid||null;navStack.push('editor');document.querySelectorAll('.page,.ed-page').forEach(p=>p.classList.remove('active'));document.getElementById('pgEdit').classList.add('active');document.getElementById('navBack').style.display='flex';document.getElementById('navBrand').style.display='none';document.getElementById('navTitle').style.display='block';document.getElementById('navTitle').textContent=pid?'Edit Post':'New Post';document.getElementById('fab').classList.remove('show');document.getElementById('btabs').style.display='none';renderEd()}
 
 function goBack(){navStack.pop();const prev=navStack[navStack.length-1];if(prev==='author'&&curAuthor){document.querySelectorAll('.page,.ed-page').forEach(p=>p.classList.remove('active'));document.getElementById('pgAuth').classList.add('active');document.getElementById('navTitle').textContent=curAuthor.name;document.getElementById('fab').classList.add('show');document.getElementById('btabs').style.display='flex';renderAuthView()}else{curAuthor=null;curPostId=null;navStack=[];document.getElementById('btabs').style.display='flex';swTab(curTab)}}
 function newPost(){showEd(null)}
 
 // ACCOUNTS
-function renderAcc(){const el=document.getElementById('pgAcc');const grp={};AUTHORS.forEach(a=>{if(!grp[a.project])grp[a.project]=[];grp[a.project].push(a)});let h=`<div class="sec-hd"><div><div class="sec-t">Accounts</div><div class="sec-st">7 BookTok accounts</div></div></div>`;for(const[proj,auths]of Object.entries(grp)){h+=`<div class="acc-grp"><div class="grp-lb"><div class="grp-dot" style="background:${PROJ[proj].color}"></div><div class="grp-nm">${PROJ[proj].name}</div></div><div class="acc-list">`;for(const a of auths){const ps=allPosts[a.id]||{};let d=0,r=0,p=0;Object.values(ps).forEach(x=>{if(x.status==='draft')d++;else if(x.status==='ready')r++;else if(x.status==='posted')p++});const pic=profilePics[a.id];h+=`<div class="acc-card" onclick="showAuth2('${a.id}')"><div class="pfp-upload" style="position:relative"><div class="acc-av" style="background:${PROJ[a.project].color}">${pic?`<img src="${pic}" alt="">`:`${a.init}`}</div><input type="file" accept="image/*" onclick="event.stopPropagation()" onchange="uploadPfp('${a.id}',this.files[0])"><div class="pfp-badge">&#9998;</div></div><div class="acc-info"><div class="acc-handle">${a.handle}</div><div class="acc-counts"><span class="cnt-pill draft">${d} draft${d!==1?'s':''}</span><span class="cnt-pill ready">${r} ready</span>${p?`<span class="cnt-pill posted">${p} posted</span>`:''}</div></div><div class="acc-arrow">&#8250;</div></div>`}h+='</div></div>'}el.innerHTML=h}
+function renderAcc(){const el=document.getElementById('pgAcc');const grp={};AUTHORS.forEach(a=>{if(!grp[a.project])grp[a.project]=[];grp[a.project].push(a)});let h=`<div class="sec-hd"><div><div class="sec-t">Accounts</div><div class="sec-st">7 BookTok accounts</div></div></div>`;for(const[proj,auths]of Object.entries(grp)){h+=`<div class="acc-grp"><div class="grp-lb"><div class="grp-dot" style="background:${PROJ[proj].color}"></div><div class="grp-nm">${PROJ[proj].name}</div></div><div class="acc-list">`;for(const a of auths){const ps=allPosts[a.id]||{};let d=0,r=0,p=0;Object.values(ps).forEach(x=>{if(x.status==='draft')d++;else if(x.status==='ready')r++;else if(x.status==='posted')p++});const pic=profilePics[a.id];h+=`<div class="acc-card" onclick="showAuth2('${a.id}')"><div class="acc-av" style="background:${PROJ[a.project].color}">${pic?`<img src="${pic}" alt="">`:`${a.init}`}</div><div class="acc-info"><div class="acc-handle">${a.handle}</div><div class="acc-counts"><span class="cnt-pill draft">${d} draft${d!==1?'s':''}</span><span class="cnt-pill ready">${r} ready</span>${p?`<span class="cnt-pill posted">${p} posted</span>`:''}</div></div><div class="acc-arrow">&#8250;</div></div>`}h+='</div></div>'}el.innerHTML=h}
 
 async function uploadPfp(aid,file){if(!file||!user)return;const url=await toDataUrl(file);await db.ref(`users/${user.uid}/profilePics/${aid}`).set(url);toast('Profile pic updated!')}
 
@@ -379,7 +384,7 @@ function togCompleted(hd){hd.nextElementSibling.classList.toggle('open')}
 
 // AUTHOR VIEW
 function renderAuthView(){const el=document.getElementById('pgAuth');const a=curAuthor;const pic=profilePics[a.id];
-el.innerHTML=`<div class="auth-banner"><div class="auth-big-av" style="background:${PROJ[a.project].color}">${pic?`<img src="${pic}" alt="">`:`${a.init}`}</div><div class="auth-b-info"><h2>${a.handle}</h2><p>${PROJ[a.project].name}</p></div></div><div class="filt-row">${['all','draft','ready','posted'].map(f=>`<div class="filt-p ${curFilter===f?'active':''}" onclick="setFilt('${f}')">${f==='all'?'All':f[0].toUpperCase()+f.slice(1)}</div>`).join('')}</div><div class="post-grid" id="postGrid"><div style="text-align:center;padding:30px;grid-column:1/-1"><span class="spinner"></span></div></div>`;renderAuthorPosts()}
+el.innerHTML=`<div class="auth-banner"><div class="pfp-edit-wrap" onclick="document.getElementById('pfpInput').click()"><div class="auth-big-av" style="background:${PROJ[a.project].color}">${pic?`<img src="${pic}" alt="">`:`${a.init}`}</div><div class="pfp-edit-badge">&#9998;</div><input type="file" id="pfpInput" accept="image/*" style="position:absolute;opacity:0;width:0;height:0" onchange="uploadPfp('${a.id}',this.files[0])"></div><div class="auth-b-info"><h2>${a.handle}</h2><p>${PROJ[a.project].name}</p></div></div><div class="filt-row">${['all','draft','ready','posted'].map(f=>`<div class="filt-p ${curFilter===f?'active':''}" onclick="setFilt('${f}')">${f==='all'?'All':f[0].toUpperCase()+f.slice(1)}</div>`).join('')}</div><div class="post-grid" id="postGrid"><div style="text-align:center;padding:30px;grid-column:1/-1"><span class="spinner"></span></div></div>`;renderAuthorPosts()}
 function setFilt(f){curFilter=f;renderAuthView()}
 
 function renderAuthorPosts(){const g=document.getElementById('postGrid');if(!g||!curAuthor)return;const data=allPosts[curAuthor.id]||{};postsCache=data;const posts=Object.entries(data).map(([id,p])=>({id,...p})).filter(p=>curFilter==='all'||p.status===curFilter).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
