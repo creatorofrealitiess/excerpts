@@ -506,7 +506,7 @@ function buildGroups(entries) {
 function renderKindle(canvas, groups, scale, fontName, fontSize) {
   const S = scale;
   const ctx = canvas.getContext('2d');
-  const baseW = Math.round(540 * (fontSize / 20));
+  const baseW = Math.round(560 * (fontSize / 20));
   const CW = baseW * S;
   const MX = Math.round(20 * (fontSize / 20)) * S;
   const MTW = CW - MX * 2;
