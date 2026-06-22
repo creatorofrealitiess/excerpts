@@ -23,7 +23,7 @@
 <body>
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useRef, useCallback, useEffect } = React;
+    const { useState, useRef, useCallback, useEffect, useMemo } = React;
 
 const COLOR_MAP = {
   male: "#B5CDFD", female: "#FEC2D3", internal: "#FFF8B3", other: "#FDD9B0", narrative: null,
@@ -1028,6 +1028,20 @@ function BookTokApp(){
   const[books,setBooks]=useState([]);
   const[booksLoading,setBooksLoading]=useState(true);
   const[selectedBook,setSelectedBook]=useState(null);
+  const[bookScan,setBookScan]=useState(null); // {trope:{strength,reason}} for selected book
+  const[scanning,setScanning]=useState(false);
+  const[scanError,setScanError]=useState("");
+  const[letClaudeChoose,setLetClaudeChoose]=useState(false);
+  const APP_VERSION="v7";
+  // Cache tracking — reflects the real Anthropic usage object from the last book-reading call
+  const[cacheInfo,setCacheInfo]=useState(null); // {status:'hit'|'write'|'miss', at:timestamp}
+  const[cacheNow,setCacheNow]=useState(Date.now());
+  // Tick the cache countdown every second while a cache entry is live (1h window)
+  useEffect(()=>{
+    if(!cacheInfo||cacheInfo.status==="miss")return;
+    const id=setInterval(()=>setCacheNow(Date.now()),1000);
+    return ()=>clearInterval(id);
+  },[cacheInfo]);
   const[addingBook,setAddingBook]=useState(false);
   const[newBookTitle,setNewBookTitle]=useState("");
   const[newBookAuthor,setNewBookAuthor]=useState("");
@@ -1133,6 +1147,9 @@ const baseName=fileArr[0].name.replace(/\.\w+$/,'').replace(/[_\-\s]*(bold[_\-\s
 
   const selectBook=useCallback((book)=>{
     setSelectedBook(book);setPdfText(book.pdfText);setAuthor(`${book.title} by ${book.author}`);setStep("upload");setError("");
+    setLetClaudeChoose(false);setScanError("");setCacheInfo(null);
+    // Use cached scan if present; otherwise the scan effect will run.
+    setBookScan(book.tropeScan||null);
   },[]);
 
   const handlePhotoUpload=useCallback(async(files)=>{
@@ -1239,13 +1256,36 @@ const baseName=fileArr[0].name.replace(/\.\w+$/,'').replace(/[_\-\s]*(bold[_\-\s
     return "[\n"+lines.join(",\n")+"\n]";
   },[]);
 
-  // Sonnet-first: one call reads the whole book, picks the scene, returns assets + tuples
-  const callSonnetScene=useCallback(async(vibe,bookText)=>{
+  // Shared headers — includes the extended-cache beta so 1h TTL is honored where required (no-op otherwise)
+  const ANTHROPIC_HEADERS=useMemo(()=>({"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","anthropic-beta":"extended-cache-ttl-2025-04-11"}),[anthropicKey]);
+  // Build the stable, cacheable prefix: the full book text FIRST (identical across scan + every
+  // generation for this book), marked 1h. Task-specific instructions go AFTER, uncached.
+  // Book-first means the scan and all generations share ONE warm cache for the whole author session.
+  const buildCachedBookBlocks=useCallback((bookText)=>{
     const truncated=bookText.length>600000?bookText.substring(0,600000):bookText;
-    setLoadingStatus("Claude: Reading book & finding scene...");
-    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:4096,output_config:{effort},messages:[{role:"user",content:`${SONNET_SCENE_PROMPT}\n\nVibe/Trope to find: ${vibe}\n\n=== FULL BOOK TEXT ===\n${truncated}`}]})});
+    return [
+      {type:"text",text:`=== FULL BOOK TEXT ===\n${truncated}`,cache_control:{type:"ephemeral",ttl:"1h"}}
+    ];
+  },[]);
+
+  // Sonnet-first: one call reads the whole book, picks the scene, returns assets + tuples
+  // Read the real cache usage from an Anthropic response and update the indicator.
+  const recordCacheUsage=useCallback((data)=>{
+    const u=data&&data.usage;if(!u)return;
+    const read=u.cache_read_input_tokens||0;
+    const write=u.cache_creation_input_tokens||0;
+    const status=read>0?"hit":write>0?"write":"miss";
+    setCacheInfo({status,at:Date.now(),read,write});
+  },[]);
+
+  const callSonnetScene=useCallback(async(vibe,bookText,chooseMode=false)=>{
+    setLoadingStatus(chooseMode?"Claude: Finding the strongest scene...":"Claude: Reading book & finding scene...");
+    const vibeInstruction=chooseMode
+      ? `Find the SINGLE strongest BookTok moment in this book — the scene most likely to stop a scroll and drive saves — regardless of which trope it fits. Then, in the JSON, add a "chosen_trope" key naming the trope it best represents (a short phrase).`
+      : `Vibe/Trope to find: ${vibe}`;
+    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:ANTHROPIC_HEADERS,body:JSON.stringify({model:claudeModel,max_tokens:4096,output_config:{effort},system:buildCachedBookBlocks(bookText),messages:[{role:"user",content:`${SONNET_SCENE_PROMPT}\n\n${vibeInstruction}`}]})});
     if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error("Claude: "+(e?.error?.message||`API ${res.status}`))}
-    const data=await res.json();const text=data?.content?.[0]?.text;
+    const data=await res.json();recordCacheUsage(data);const text=data?.content?.[0]?.text;
     if(!text)throw new Error("Claude returned an empty response. Try again.");
     let clean=text.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
     // Be forgiving: pull the outermost {...} if there's any stray text around it
@@ -1266,14 +1306,43 @@ const baseName=fileArr[0].name.replace(/\.\w+$/,'').replace(/[_\-\s]*(bold[_\-\s
     }
     if(!obj.tuples||!Array.isArray(obj.tuples)||obj.tuples.length===0)throw new Error("Claude didn't return an excerpt. Try again.");
     return obj;
-  },[anthropicKey,claudeModel,effort]);
+  },[anthropicKey,claudeModel,effort,ANTHROPIC_HEADERS,buildCachedBookBlocks,recordCacheUsage]);
+
+  // Scan a book once: which preset tropes are actually present, how strongly, and why.
+  const scanBookTropes=useCallback(async(bookText)=>{
+    const prompt=`You are a romance-fiction analyst. You will be given the FULL TEXT of a romance novel and a list of BookTok trope categories. For EACH trope, judge how strongly this specific book can deliver a great standalone slideshow excerpt for it.
+
+Rate each trope:
+- "strong" = the book has clear, vivid, dialogue-rich scenes that nail this trope
+- "present" = the trope appears but scenes are thinner or less punchy
+- "weak" = barely present or absent; an excerpt for this would feel forced
+
+Return ONLY a JSON object (no markdown, no preamble) mapping each EXACT trope string to an object with "strength" and a short "reason" (max 12 words). Example shape:
+{"Possessive / Jealousy":{"strength":"strong","reason":"multiple jealous confrontation scenes between leads"}, ...}
+
+Trope list (use these EXACT strings as keys):
+${VIBES.map(v=>`- ${v}`).join("\n")}`;
+    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:ANTHROPIC_HEADERS,body:JSON.stringify({model:claudeModel,max_tokens:2048,output_config:{effort},system:buildCachedBookBlocks(bookText),messages:[{role:"user",content:prompt}]})});
+    if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error("Scan: "+(e?.error?.message||`API ${res.status}`))}
+    const data=await res.json();recordCacheUsage(data);const text=data?.content?.[0]?.text;
+    if(!text)throw new Error("Scan returned empty.");
+    let clean=text.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
+    const s=clean.indexOf('{'),en=clean.lastIndexOf('}');if(s>=0&&en>s)clean=clean.substring(s,en+1);
+    let obj;
+    try{obj=JSON.parse(clean)}
+    catch(err){const repaired=clean.replace(/[\u201C\u201D]/g,'"').replace(/[\u2018\u2019]/g,"'").replace(/,(\s*[\]}])/g,'$1');try{obj=JSON.parse(repaired)}catch(e2){console.error("Trope scan raw:\n",text);throw new Error("Scan response wasn't valid JSON.")}}
+    return obj;
+  },[anthropicKey,claudeModel,effort,ANTHROPIC_HEADERS,buildCachedBookBlocks,recordCacheUsage]);
 
   const callGemini=useCallback(async()=>{
     if(!pdfText.trim()){setError("No book selected or PDF text extracted.");return}
-    const vibe=customVibe.trim()||selectedVibe;if(!vibe){setError("Please select or enter a vibe.");return}
+    const vibe=customVibe.trim()||selectedVibe;
+    const chooseMode=letClaudeChoose&&!vibe; // only "choose" when no explicit vibe picked
+    if(!vibe&&!chooseMode){setError("Please select or enter a vibe.");return}
     const geminiPath=useGeminiFallback&&apiKey.trim();
     if(!geminiPath&&!anthropicKey.trim()){setError("Please enter your Claude API key (or enable the Gemini fallback in settings).");return}
     if(geminiPath&&!apiKey.trim()){setError("Gemini fallback is on but no Gemini API key is set.");return}
+    if(geminiPath&&chooseMode){setError("\u2018Let Claude choose\u2019 needs the Claude path. Turn off the Gemini fallback to use it.");return}
     setError("");setLoading(true);
     const truncated=pdfText.length>300000?pdfText.substring(0,300000):pdfText;
     const geminiUrl=`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
@@ -1282,10 +1351,11 @@ const baseName=fileArr[0].name.replace(/\.\w+$/,'').replace(/[_\-\s]*(bold[_\-\s
     if(!geminiPath){
       // === SONNET MODE (default): one call reads book, picks scene, returns tuples ===
       try{
-        const obj=await callSonnetScene(vibe,pdfText);
+        const obj=await callSonnetScene(vibe,pdfText,chooseMode);
         setHook(obj.hook||"");
         const _sc=splitReactionFromCaption(obj.caption||"");setReaction(_sc.reaction);setCaption(_sc.caption);setContext(obj.context||"");
         const bm=(obj.caption||"").match(/\uD83D\uDCDA\s*:?\s*(.+?)(?:\n|$)/);if(bm)setAuthor(bm[1].trim());else if(selectedBook)setAuthor(`${selectedBook.title} by ${selectedBook.author}`);
+        if(chooseMode&&obj.chosen_trope)setSelectedVibe(obj.chosen_trope); // reflect what Claude picked
         const rawTuple=tuplesArrayToRaw(obj.tuples);
         const fixedTuple=autoFixFlowTags(rawTuple);
         setTupleRaw(fixedTuple);
@@ -1325,7 +1395,29 @@ const baseName=fileArr[0].name.replace(/\.\w+$/,'').replace(/[_\-\s]*(bold[_\-\s
         generateBookSummary(truncated);
       }catch(e){setError("Gemini error: "+e.message);setLoading(false);setLoadingStatus("")}
     }
-  },[apiKey,anthropicKey,claudeModel,model,pdfText,selectedVibe,customVibe,selectedBook,useGeminiFallback,geminiRetryFetch,callSonnetScene,tuplesArrayToRaw]);
+  },[apiKey,anthropicKey,claudeModel,model,pdfText,selectedVibe,customVibe,selectedBook,useGeminiFallback,letClaudeChoose,geminiRetryFetch,callSonnetScene,tuplesArrayToRaw]);
+
+  // Auto-scan tropes when a book is selected (skips if cached or no Claude key)
+  useEffect(()=>{
+    if(!selectedBook||bookScan||scanning)return;
+    if(selectedBook.tropeScan){setBookScan(selectedBook.tropeScan);return}
+    if(!anthropicKey.trim())return; // scan needs Claude; silently skip if key not yet entered
+    let cancelled=false;
+    (async()=>{
+      setScanning(true);setScanError("");
+      try{
+        const scan=await scanBookTropes(selectedBook.pdfText);
+        if(cancelled)return;
+        setBookScan(scan);
+        const updated={...selectedBook,tropeScan:scan};
+        setSelectedBook(updated);
+        setBooks(prev=>prev.map(b=>b.id===updated.id?updated:b));
+        dbPutBook(updated).catch(()=>{});
+      }catch(e){if(!cancelled)setScanError(e.message)}
+      finally{if(!cancelled)setScanning(false)}
+    })();
+    return ()=>{cancelled=true};
+  },[selectedBook,bookScan,scanning,anthropicKey,scanBookTropes]);
 
   // Generate a character/relationship summary from Gemini for Hook Forge context
   const generateBookSummary=useCallback(async(bookText)=>{
@@ -1354,7 +1446,7 @@ ${bookText.substring(0,200000)}`}]}],generationConfig:{temperature:0.3,maxOutput
   const doRender=useCallback(()=>{const entries=parseTupleData(tupleRaw);if(!entries.length){setError("No valid tuple data.");return}document.fonts.load(`500 ${fontSize}px "${fontName}"`).then(()=>{renderKindle(canvasRef.current,buildGroups(entries),2,fontName,fontSize);setRendered(true)})},[tupleRaw,fontName,fontSize]);
   const doCopy=useCallback(async()=>{try{const blob=await new Promise(r=>canvasRef.current.toBlob(r,'image/png'));await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);setCopied(true);setTimeout(()=>setCopied(false),2000)}catch(e){console.error(e)}},[]);
   const copyField=useCallback(async(text,field)=>{try{await navigator.clipboard.writeText(text);setCopiedField(field);setTimeout(()=>setCopiedField(""),1500)}catch(e){console.error(e)}},[]);
-  const resetAll=useCallback(()=>{setStep("upload");setActiveTab("generate");setWizardStep(1);setPdfFile(null);setPdfText("");setSelectedVibe("");setCustomVibe("");setHook("");setCaption("");setReaction("");setContext("");setTupleRaw("");setRendered(false);setAuthor("");setError("");setSelectedPhotos([]);setAiPickedPhotos([]);setSelectedBook(null);setChatMessages([]);setChatOpen(false);setHookVariants([]);setHookForgeOpen(false);setHookForgeError("");setDetectedTropes([]);setMysteryMode(false);setSwapText("");setSwapOpen(false);setSwapError("");setBookSummary("");window._pinterestSearches=null},[]);
+  const resetAll=useCallback(()=>{setStep("upload");setActiveTab("generate");setWizardStep(1);setPdfFile(null);setPdfText("");setSelectedVibe("");setCustomVibe("");setHook("");setCaption("");setReaction("");setContext("");setTupleRaw("");setRendered(false);setAuthor("");setError("");setSelectedPhotos([]);setAiPickedPhotos([]);setSelectedBook(null);setChatMessages([]);setChatOpen(false);setHookVariants([]);setHookForgeOpen(false);setHookForgeError("");setDetectedTropes([]);setMysteryMode(false);setSwapText("");setSwapOpen(false);setSwapError("");setBookSummary("");setLetClaudeChoose(false);setCacheInfo(null);window._pinterestSearches=null},[]);
 
   // Auto-scroll chat to bottom
   useEffect(()=>{if(chatEndRef.current)chatEndRef.current.scrollIntoView({behavior:"smooth"})},[chatMessages,chatLoading]);
@@ -1617,10 +1709,28 @@ No markdown, no backticks.
         <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
           <span style={{fontFamily:"'Fraunces',serif",fontSize:"18px",fontWeight:700,color:"#1a1815",letterSpacing:"-0.3px"}}>Post<span style={{color:"#e85d3a"}}>Maker</span></span>
           <span style={{fontSize:"10px",color:"#a09a93",fontWeight:400}}>BookTok Post Generator</span>
+          <span style={{fontSize:"9px",color:"#c4bfb8",fontWeight:600,border:"1px solid #e8e6e1",borderRadius:"4px",padding:"1px 5px",letterSpacing:"0.3px"}}>{APP_VERSION}</span>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
           {step==="results"&&<button onClick={resetAll} style={{...ST.btn,backgroundColor:"transparent",color:"#6b6660",border:"1px solid #e8e6e1",fontSize:"11px",padding:"6px 14px",borderRadius:"20px"}}>← New Book</button>}
           {step!=="results"&&<button onClick={()=>{setStep("results");setActiveTab("excerpt")}} style={{...ST.btn,backgroundColor:"transparent",color:"#a09a93",border:"1px solid #e8e6e1",fontSize:"11px",padding:"6px 14px",borderRadius:"20px"}}>Skip to Excerpt ↗</button>}
+          {cacheInfo&&cacheInfo.status!=="miss"&&(()=>{
+            const elapsed=Math.floor((cacheNow-cacheInfo.at)/1000);
+            const remain=3600-elapsed;
+            const expired=remain<=0;
+            const mm=Math.max(0,Math.floor(remain/60));
+            const ss=Math.max(0,remain%60);
+            const isHit=cacheInfo.status==="hit";
+            const color=expired?"#c4bfb8":isHit?"#2da562":"#e0a32e";
+            const label=expired?"cache expired":isHit?"cache hit":"cache primed";
+            return(
+              <div title={expired?"The 1-hour cache window has elapsed. The next generation will re-write it.":`Book cache is warm. Resets to 60:00 on each call. ${isHit?"Last call read from cache (cheap).":"Last call wrote the cache."}`} style={{display:"flex",alignItems:"center",gap:"6px",padding:"4px 9px",borderRadius:"20px",border:"1px solid #e8e6e1",backgroundColor:expired?"#faf9f7":"#fff"}}>
+                <span style={{width:"7px",height:"7px",borderRadius:"50%",backgroundColor:color,flexShrink:0}} />
+                <span style={{fontSize:"10px",color:"#6b6660",fontWeight:500}}>{label}</span>
+                {!expired&&<span style={{fontSize:"10px",color:"#a09a93",fontVariantNumeric:"tabular-nums"}}>{mm}:{String(ss).padStart(2,"0")}</span>}
+              </div>
+            );
+          })()}
           <span style={{fontSize:"10px",color:"#a09a93"}}>{geminiActive?"gemini + claude":"claude"}</span>
         </div>
       </div>
@@ -1818,25 +1928,55 @@ No markdown, no backticks.
           {/* STEP 3: Select Vibe & Generate */}
           {wizardStep===3&&(
             <div style={{animation:"fadeIn 0.25s ease"}}>
-              <div style={{marginBottom:"24px"}}>
+              <div style={{marginBottom:"20px"}}>
                 <h3 style={{fontFamily:"'Fraunces',serif",fontSize:"20px",fontWeight:700,color:"#1a1815",marginBottom:"4px"}}>Pick a vibe</h3>
                 <p style={{fontSize:"12px",color:"#a09a93",fontFamily:UI_FONT}}>What kind of scene are you looking for in <strong style={{color:"#1a1815"}}>{selectedBook?.title||"this book"}</strong>?</p>
               </div>
 
+              {/* Let Claude choose */}
+              <button onClick={()=>{setLetClaudeChoose(true);setSelectedVibe("");setCustomVibe("")}} disabled={loading} style={{width:"100%",padding:"12px 14px",marginBottom:"14px",borderRadius:"10px",border:letClaudeChoose?"1px solid #e85d3a":"1px dashed #d8d4cd",backgroundColor:letClaudeChoose?"#fef0ec":"#faf9f7",color:letClaudeChoose?"#e85d3a":"#6b6660",cursor:"pointer",fontSize:"13px",fontFamily:UI_FONT,fontWeight:500,transition:"all 0.15s",textAlign:"left"}}>
+                ✨ Let Claude pick the best scene
+                <span style={{display:"block",fontSize:"11px",color:letClaudeChoose?"#e8896f":"#a09a93",fontWeight:400,marginTop:"2px"}}>Skips trope selection — finds the strongest moment in the book</span>
+              </button>
+
+              {/* Scan status */}
+              {scanning&&(
+                <div style={{padding:"9px 12px",marginBottom:"12px",borderRadius:"8px",backgroundColor:"#faf9f7",border:"1px solid #e8e6e1",display:"flex",alignItems:"center",gap:"8px"}}>
+                  <span style={{display:"inline-block",width:"12px",height:"12px",border:"2px solid #e8e6e1",borderTopColor:"#e85d3a",borderRadius:"50%",animation:"spin 0.8s linear infinite"}} />
+                  <span style={{fontSize:"11px",color:"#a09a93",fontFamily:UI_FONT}}>Scanning the book for its strongest tropes…</span>
+                </div>
+              )}
+              {scanError&&!scanning&&(
+                <div style={{padding:"9px 12px",marginBottom:"12px",borderRadius:"8px",backgroundColor:"#faf9f7",border:"1px solid #e8e6e1",fontSize:"11px",color:"#a09a93",fontFamily:UI_FONT}}>Couldn't scan tropes ({scanError}). You can still pick any vibe below.</div>
+              )}
+
               <div style={{marginBottom:"20px"}}>
                 <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"12px"}}>
-                  {VIBES.map(v=>(<button key={v} onClick={()=>{setSelectedVibe(v);setCustomVibe("")}} style={{padding:"8px 14px",borderRadius:"20px",fontSize:"12px",border:selectedVibe===v?"1px solid #e85d3a":"1px solid #e8e6e1",backgroundColor:selectedVibe===v?"#fef0ec":"#fff",color:selectedVibe===v?"#e85d3a":"#6b6660",cursor:"pointer",transition:"all 0.15s",fontFamily:UI_FONT}}>{v}</button>))}
+                  {VIBES.map(v=>{
+                    const sc=bookScan&&bookScan[v];const strength=sc&&sc.strength;
+                    const isSel=selectedVibe===v;
+                    const weak=strength==="weak";
+                    const strong=strength==="strong";
+                    const dot=strong?"#2da562":strength==="present"?"#e0a32e":weak?"#c4bfb8":null;
+                    return(
+                    <button key={v} title={sc?sc.reason:""} onClick={()=>{setSelectedVibe(v);setCustomVibe("");setLetClaudeChoose(false)}} style={{padding:"8px 12px",borderRadius:"20px",fontSize:"12px",border:isSel?"1px solid #e85d3a":strong?"1px solid #bfe3cd":"1px solid #e8e6e1",backgroundColor:isSel?"#fef0ec":strong?"#f3faf5":"#fff",color:isSel?"#e85d3a":weak?"#c4bfb8":"#6b6660",cursor:"pointer",transition:"all 0.15s",fontFamily:UI_FONT,opacity:weak?0.7:1,display:"inline-flex",alignItems:"center",gap:"6px"}}>
+                      {dot&&<span style={{width:"6px",height:"6px",borderRadius:"50%",backgroundColor:dot,flexShrink:0}} />}
+                      {v}
+                    </button>)
+                  })}
                 </div>
-                <input value={customVibe} onChange={e=>{setCustomVibe(e.target.value);if(e.target.value)setSelectedVibe("")}} placeholder="Or type a custom vibe..." style={{...ST.input,fontSize:"13px"}} />
+                {bookScan&&<p style={{fontSize:"10px",color:"#c4bfb8",fontFamily:UI_FONT,margin:"0 0 12px 2px"}}>● strong  ● present  ● weak — based on a scan of this book. Hover a trope for why.</p>}
+                <input value={customVibe} onChange={e=>{setCustomVibe(e.target.value);if(e.target.value){setSelectedVibe("");setLetClaudeChoose(false)}}} placeholder="Or type a custom vibe..." style={{...ST.input,fontSize:"13px"}} />
               </div>
 
               {error&&<div style={{padding:"10px 14px",backgroundColor:"#fef0ec",border:"1px solid #f5c6cb",borderRadius:"6px",color:"#dc3545",fontSize:"12px",marginBottom:"16px",fontFamily:"'DM Sans', sans-serif"}}>{error}</div>}
 
               <div style={{display:"flex",gap:"10px"}}>
                 <button onClick={()=>setWizardStep(2)} style={{...ST.btn,padding:"14px 20px",backgroundColor:"transparent",color:"#a09a93",border:"1px solid #e8e6e1",fontSize:"13px",borderRadius:"10px"}}>← Back</button>
-                <button onClick={callGemini} disabled={loading||(!selectedVibe&&!customVibe.trim())} style={{...ST.btn,flex:1,padding:"14px",backgroundColor:loading||(!selectedVibe&&!customVibe.trim())?"#f0eeea":"#e85d3a",color:loading||(!selectedVibe&&!customVibe.trim())?"#a09a93":"#fff",fontSize:"14px",borderRadius:"10px"}}>
-                  {loading?(<span style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"8px"}}><span style={{display:"inline-block",width:"14px",height:"14px",border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 0.8s linear infinite"}} />{loadingStatus}</span>):generateLabel}
-                </button>
+                {(()=>{const canGo=letClaudeChoose||selectedVibe||customVibe.trim();return(
+                <button onClick={callGemini} disabled={loading||!canGo} style={{...ST.btn,flex:1,padding:"14px",backgroundColor:loading||!canGo?"#f0eeea":"#e85d3a",color:loading||!canGo?"#a09a93":"#fff",fontSize:"14px",borderRadius:"10px"}}>
+                  {loading?(<span style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"8px"}}><span style={{display:"inline-block",width:"14px",height:"14px",border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 0.8s linear infinite"}} />{loadingStatus}</span>):(letClaudeChoose?"Generate — Claude's Pick":generateLabel)}
+                </button>);})()}
               </div>
             </div>
           )}
