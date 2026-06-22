@@ -360,12 +360,15 @@ Read the book and locate the strongest moment matching the requested vibe/trope.
 Pick the SINGLE best contiguous passage of roughly 100-175 words. Do NOT stitch together separate parts of the book — it must be one continuous passage exactly as written.
 
 === STEP 2: PRODUCE THE ASSETS ===
+First, fix in your mind the EXACT contiguous passage you selected in Step 1. Every field below must describe THAT SAME passage — the hook, the caption, and the context must all be about the specific scene whose text you put in "tuples". Do NOT describe one scene in the context and transcribe a different scene in the tuples. If you find yourself tempted to write context about a scene that isn't the one in your excerpt, STOP and re-align them to the passage in "tuples".
+
 Output a JSON object (and NOTHING else — no markdown, no backticks, no preamble) with these exact keys:
 
 {
-  "hook": "ONE punchy sentence, third person, 10-15 words max, high curiosity",
+  "hook": "ONE punchy sentence, third person, 10-15 words max, high curiosity — about the passage in tuples",
   "caption": "multi-line caption, see format below",
-  "context": "2-4 sentences describing the scene",
+  "context": "2-4 sentences describing THE EXACT scene in tuples — the same moment, same characters, same beat",
+  "excerpt_first_line": "the first 6-10 words of the passage exactly as they appear in tuples (a self-check that context and tuples match)",
   "tuples": [ ...the formatted excerpt as an array, see rules below... ]
 }
 
@@ -948,10 +951,12 @@ function autoFixFlowTags(rawTuple) {
     if (shouldFlow && !cur.tag.endsWith('_flow')) {
       cur.line = cur.line.replace('"' + cur.tag + '"', '"' + baseTag + '_flow"');
       cur.tag = baseTag + '_flow';
-    } else if (!shouldFlow && cur.tag.endsWith('_flow')) {
-      cur.line = cur.line.replace('"' + cur.tag + '"', '"' + baseTag + '"');
-      cur.tag = baseTag;
     }
+    // NOTE: we intentionally do NOT strip an existing _flow from a dialogue line.
+    // In the current pipeline the model emits correct dialogue _flow tags, and the
+    // shouldFlow re-derivation can misfire on quote variations — so a present _flow
+    // on dialogue is treated as authoritative. (narrative/internal/other _flow are
+    // still removed above, since those are always mistakes.)
   }
 
   for (const tl of tupleLines) {
@@ -1032,7 +1037,7 @@ function BookTokApp(){
   const[scanning,setScanning]=useState(false);
   const[scanError,setScanError]=useState("");
   const[letClaudeChoose,setLetClaudeChoose]=useState(false);
-  const APP_VERSION="v8";
+  const APP_VERSION="v9";
   // Cache tracking — reflects the real Anthropic usage object from the last book-reading call
   const[cacheInfo,setCacheInfo]=useState(null); // {status:'hit'|'write'|'miss', at:timestamp}
   const[cacheNow,setCacheNow]=useState(Date.now());
@@ -1352,6 +1357,13 @@ ${VIBES.map(v=>`- ${v}`).join("\n")}`;
       // === SONNET MODE (default): one call reads book, picks scene, returns tuples ===
       try{
         const obj=await callSonnetScene(vibe,pdfText,chooseMode);
+        // Non-blocking drift check: does the stated first line match the actual first tuple of dialogue/text?
+        if(obj.excerpt_first_line&&Array.isArray(obj.tuples)&&obj.tuples[0]){
+          const stated=String(obj.excerpt_first_line).toLowerCase().replace(/[^a-z0-9 ]/g,'').trim();
+          const firstTupleText=String(obj.tuples[0][0]||"").toLowerCase().replace(/[^a-z0-9 ]/g,'').trim();
+          const overlap=stated&&firstTupleText&&(firstTupleText.includes(stated.slice(0,15))||stated.includes(firstTupleText.slice(0,15)));
+          if(!overlap)console.warn("Possible scene drift: context/hook may not match the excerpt. Stated first line:",obj.excerpt_first_line,"| First tuple:",obj.tuples[0][0]);
+        }
         setHook(obj.hook||"");
         const _sc=splitReactionFromCaption(obj.caption||"");setReaction(_sc.reaction);setCaption(_sc.caption);setContext(obj.context||"");
         const bm=(obj.caption||"").match(/\uD83D\uDCDA\s*:?\s*(.+?)(?:\n|$)/);if(bm)setAuthor(bm[1].trim());else if(selectedBook)setAuthor(`${selectedBook.title} by ${selectedBook.author}`);
