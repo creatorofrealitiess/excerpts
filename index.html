@@ -395,17 +395,18 @@ MODIFIER SUFFIXES (combine freely):
 - _bold, _italic = styling
 - e.g. male_flow, female_bold, male_italic_flow, female_bold_italic_underline
 
-DIALOGUE MARKS:
-- Use DOUBLED straight quotes "" as the dialogue marks INSIDE the string.
-- Example: ["""Hello there,""", "male"] — wait, that is wrong. Correct JSON: the string value is  ""Hello there,""  so in JSON it appears as "\\"\\"Hello there,\\"\\"".
-- In plain terms: every dialogue string both OPENS and CLOSES with two straight double-quote characters. Do NOT use curly/smart quotes.
+DIALOGUE TEXT — IMPORTANT:
+- Put the dialogue's plain words in the "text" field WITHOUT any surrounding quotation marks. The app adds the quote marks automatically based on the tag.
+- Example: a line spoken by him → ["Hello there,", "male"]  (NOT with extra quotes around Hello)
+- Do NOT use curly/smart quotes anywhere. Keep apostrophes as plain '.
+- Because the text has no quote marks, the JSON stays clean and easy to parse.
 
 _flow RULE (same line: dialogue + speech tag → two tuples):
-"Stay," she whispered.   →   [""Stay,"" , "female_flow"], [" she whispered.", "narrative"]
-"What are you doing?" I asked.   →   [""What are you doing?"", "female_flow"], [" I asked.", "narrative"]
+"Stay," she whispered.   →   ["Stay,", "female_flow"], [" she whispered.", "narrative"]
+"What are you doing?" I asked.   →   ["What are you doing?", "female_flow"], [" I asked.", "narrative"]
 - _flow applies before commas, question marks, AND exclamation marks.
 - ONLY the speech-tag continuation in a _flow pair starts with a leading space.
-- Standalone dialogue on its own line = plain tag, no _flow: [""Say it."", "male"]
+- Standalone dialogue on its own line = plain tag, no _flow: ["Say it.", "male"]
 
 SPLITTING — CRITICAL:
 - EVERY tuple is ONLY dialogue OR ONLY narration, never both.
@@ -1251,7 +1252,18 @@ const baseName=fileArr[0].name.replace(/\.\w+$/,'').replace(/[_\-\s]*(bold[_\-\s
     const s=clean.indexOf('{'),en=clean.lastIndexOf('}');
     if(s>=0&&en>s)clean=clean.substring(s,en+1);
     let obj;
-    try{obj=JSON.parse(clean)}catch(err){throw new Error("Claude's response wasn't valid JSON. Try regenerating.")}
+    try{obj=JSON.parse(clean)}
+    catch(err){
+      // Attempt 2: normalize smart quotes to straight, strip trailing commas before ] or }
+      let repaired=clean
+        .replace(/[\u201C\u201D]/g,'"').replace(/[\u2018\u2019]/g,"'")
+        .replace(/,(\s*[\]}])/g,'$1');
+      try{obj=JSON.parse(repaired)}
+      catch(err2){
+        console.error("Sonnet scene — raw response that failed JSON.parse:\n",text);
+        throw new Error("Claude's response wasn't valid JSON. The raw response was logged to the browser console (Inspect → Console). Try regenerating.");
+      }
+    }
     if(!obj.tuples||!Array.isArray(obj.tuples)||obj.tuples.length===0)throw new Error("Claude didn't return an excerpt. Try again.");
     return obj;
   },[anthropicKey,claudeModel,effort]);
