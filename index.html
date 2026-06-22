@@ -976,8 +976,15 @@ function BookTokApp(){
   const[wizardStep,setWizardStep]=useState(1); // 1=API keys, 2=Select book, 3=Select vibe
   const[apiKey,setApiKey]=useState("");
   const[anthropicKey,setAnthropicKey]=useState("");
-  const[claudeModel,setClaudeModel]=useState("claude-sonnet-4-6");
-  const CLAUDE_MODELS = [{id:"claude-sonnet-4-6",label:"Sonnet 4.6"},{id:"claude-opus-4-6",label:"Opus 4.6"}];
+  const[claudeModel,setClaudeModel]=useState("claude-opus-4-8");
+  const CLAUDE_MODELS = [{id:"claude-opus-4-8",label:"Opus 4.8"},{id:"claude-opus-4-7",label:"Opus 4.7"},{id:"claude-sonnet-4-6",label:"Sonnet 4.6"}];
+  // Which effort levels each model accepts (xhigh is Opus-4.7/4.8 only; Sonnet 4.6 tops out at max without xhigh)
+  const EFFORT_BY_MODEL = {
+    "claude-opus-4-8": ["low","medium","high","xhigh","max"],
+    "claude-opus-4-7": ["low","medium","high","xhigh","max"],
+    "claude-sonnet-4-6": ["low","medium","high","max"],
+  };
+  const[effort,setEffort]=useState("high");
   const[model,setModel]=useState("gemini-3.1-pro-preview");
   const[useGeminiFallback,setUseGeminiFallback]=useState(false); // Sonnet does excerpts by default; this opts back into the old Gemini path
   const[showFallback,setShowFallback]=useState(false);
@@ -1235,7 +1242,7 @@ const baseName=fileArr[0].name.replace(/\.\w+$/,'').replace(/[_\-\s]*(bold[_\-\s
   const callSonnetScene=useCallback(async(vibe,bookText)=>{
     const truncated=bookText.length>600000?bookText.substring(0,600000):bookText;
     setLoadingStatus("Claude: Reading book & finding scene...");
-    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:4096,messages:[{role:"user",content:`${SONNET_SCENE_PROMPT}\n\nVibe/Trope to find: ${vibe}\n\n=== FULL BOOK TEXT ===\n${truncated}`}]})});
+    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:4096,output_config:{effort},messages:[{role:"user",content:`${SONNET_SCENE_PROMPT}\n\nVibe/Trope to find: ${vibe}\n\n=== FULL BOOK TEXT ===\n${truncated}`}]})});
     if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error("Claude: "+(e?.error?.message||`API ${res.status}`))}
     const data=await res.json();const text=data?.content?.[0]?.text;
     if(!text)throw new Error("Claude returned an empty response. Try again.");
@@ -1247,7 +1254,7 @@ const baseName=fileArr[0].name.replace(/\.\w+$/,'').replace(/[_\-\s]*(bold[_\-\s
     try{obj=JSON.parse(clean)}catch(err){throw new Error("Claude's response wasn't valid JSON. Try regenerating.")}
     if(!obj.tuples||!Array.isArray(obj.tuples)||obj.tuples.length===0)throw new Error("Claude didn't return an excerpt. Try again.");
     return obj;
-  },[anthropicKey,claudeModel]);
+  },[anthropicKey,claudeModel,effort]);
 
   const callGemini=useCallback(async()=>{
     if(!pdfText.trim()){setError("No book selected or PDF text extracted.");return}
@@ -1284,7 +1291,7 @@ const baseName=fileArr[0].name.replace(/\.\w+$/,'').replace(/[_\-\s]*(bold[_\-\s
         setHook(scene.hook);const _sc=splitReactionFromCaption(scene.caption);setReaction(_sc.reaction);setCaption(_sc.caption);setContext(scene.context);
         const bm=scene.caption.match(/\uD83D\uDCDA\s*:?\s*(.+?)(?:\n|$)/);if(bm)setAuthor(bm[1].trim());else if(selectedBook)setAuthor(`${selectedBook.title} by ${selectedBook.author}`);
         setLoadingStatus("Claude: Formatting tuples...");
-        const sonRes=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:4096,messages:[{role:"user",content:`${SONNET_TUPLE_PROMPT}\n\nHere is the excerpt to format:\n\n${scene.excerpt}`}]})});
+        const sonRes=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:4096,output_config:{effort},messages:[{role:"user",content:`${SONNET_TUPLE_PROMPT}\n\nHere is the excerpt to format:\n\n${scene.excerpt}`}]})});
         if(!sonRes.ok){const e=await sonRes.json().catch(()=>({}));throw new Error("Sonnet: "+(e?.error?.message||`API ${sonRes.status}`))}
         const sonData=await sonRes.json();const sonText=sonData?.content?.[0]?.text;if(!sonText)throw new Error("Sonnet returned empty response");
         const cleanTuple=sonText.trim().replace(/^```(?:python)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
@@ -1342,6 +1349,8 @@ ${bookText.substring(0,200000)}`}]}],generationConfig:{temperature:0.3,maxOutput
 
   // Auto-rerender canvas when switching back to Excerpt tab
   useEffect(()=>{if(activeTab==="excerpt"&&rendered&&tupleRaw&&canvasRef.current){setTimeout(()=>autoRender(tupleRaw),100)}},[activeTab]);
+  // Keep effort valid for the selected model (e.g. switching to Sonnet clears xhigh)
+  useEffect(()=>{const allowed=EFFORT_BY_MODEL[claudeModel]||["high"];if(!allowed.includes(effort))setEffort(allowed.includes("high")?"high":allowed[allowed.length-1])},[claudeModel]);
 
   const sendChat=useCallback(async()=>{
     const msg=chatInput.trim();
@@ -1396,7 +1405,7 @@ ${bookText.substring(0,200000)}`}]}],generationConfig:{temperature:0.3,maxOutput
     if(!excerptText&&!context&&!hook){setHookForgeError("Generate an excerpt first.");return}
     setHookForgeLoading(true);setHookForgeError("");setHookVariants([]);setHookForgeOpen(true);
     try{
-      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:2048,messages:[{role:"user",content:`You write hooks for BookTok romance slideshows. A hook is text overlaid on a moody photo — it must make someone STOP scrolling in under 2 seconds and NEED to swipe.
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:2048,output_config:{effort},messages:[{role:"user",content:`You write hooks for BookTok romance slideshows. A hook is text overlaid on a moody photo — it must make someone STOP scrolling in under 2 seconds and NEED to swipe.
 
 THIS SCENE:
 - Hook so far: ${hook}
@@ -1470,7 +1479,7 @@ JSON only. No markdown, no backticks.
       else throw new Error("Unexpected response format");
     }catch(e){setHookForgeError("Hook Forge failed: "+e.message)}
     setHookForgeLoading(false);
-  },[anthropicKey,claudeModel,hook,context,tupleRaw,bookSummary]);
+  },[anthropicKey,claudeModel,effort,hook,context,tupleRaw,bookSummary]);
 
   // === CAPTION BUILDER: Auto-detect tropes and build caption ===
   const detectTropesAndBuildCaption=useCallback(async()=>{
@@ -1479,7 +1488,7 @@ JSON only. No markdown, no backticks.
     if(!excerptText&&!context)return;
     setCaptionGenLoading(true);
     try{
-      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:1024,messages:[{role:"user",content:`Analyze this romance book excerpt and identify the tropes present.
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:1024,output_config:{effort},messages:[{role:"user",content:`Analyze this romance book excerpt and identify the tropes present.
 
 Scene context: ${context}
 Current hook: ${hook}
@@ -1515,7 +1524,7 @@ No markdown, no backticks.
       }
     }catch(e){console.error("Caption builder error:",e)}
     setCaptionGenLoading(false);
-  },[anthropicKey,claudeModel,hook,context,tupleRaw,author,mysteryMode]);
+  },[anthropicKey,claudeModel,effort,hook,context,tupleRaw,author,mysteryMode]);
 
   // Rebuild caption when mystery mode toggles
   useEffect(()=>{
@@ -1541,7 +1550,7 @@ No markdown, no backticks.
     setSwapLoading(true);setSwapError("");
     try{
       // Step 1: Format tuples
-      const sonRes=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:4096,messages:[{role:"user",content:`${SONNET_TUPLE_PROMPT}\n\nHere is the excerpt to format:\n\n${swapText.trim()}`}]})});
+      const sonRes=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:4096,output_config:{effort},messages:[{role:"user",content:`${SONNET_TUPLE_PROMPT}\n\nHere is the excerpt to format:\n\n${swapText.trim()}`}]})});
       if(!sonRes.ok){const e=await sonRes.json().catch(()=>({}));throw new Error("Tuple formatting: "+(e?.error?.message||`API ${sonRes.status}`))}
       const sonData=await sonRes.json();const sonText=sonData?.content?.[0]?.text;if(!sonText)throw new Error("Tuple formatting returned empty");
       const cleanTuple=sonText.trim().replace(/^```(?:python)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
@@ -1551,7 +1560,7 @@ No markdown, no backticks.
 
       // Step 2: Regenerate hook, reaction, caption
       const excerptPlain=swapText.trim().substring(0,800);
-      const regenRes=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:1024,messages:[{role:"user",content:`You are a BookTok strategist. Based on this new excerpt from a romance book, generate post assets.
+      const regenRes=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:1024,output_config:{effort},messages:[{role:"user",content:`You are a BookTok strategist. Based on this new excerpt from a romance book, generate post assets.
 
 Book: ${author||"Unknown"}
 Scene context: ${context}
@@ -1582,7 +1591,7 @@ No markdown, no backticks.
       setSwapOpen(false);
     }catch(e){setSwapError(e.message)}
     setSwapLoading(false);
-  },[anthropicKey,claudeModel,swapText,author,context,mysteryMode,bookSummary,autoRender]);
+  },[anthropicKey,claudeModel,effort,swapText,author,context,mysteryMode,bookSummary,autoRender]);
 
   const tabStyle=(t)=>({padding:"8px 18px",fontSize:"12px",fontWeight:600,cursor:"pointer",border:"none",borderBottom:activeTab===t?"2px solid #e85d3a":"2px solid transparent",backgroundColor:"transparent",color:activeTab===t?"#1a1815":"#a09a93",fontFamily:UI_FONT,transition:"all 0.15s",letterSpacing:"0.3px"});
   const catTabStyle=(id)=>({padding:"6px 14px",fontSize:"12px",fontWeight:500,cursor:"pointer",border:"1px solid",borderColor:activeCatId===id?"#e85d3a":"#e8e6e1",borderRadius:"20px",backgroundColor:activeCatId===id?"#fef0ec":"transparent",color:activeCatId===id?"#e85d3a":"#a09a93",fontFamily:UI_FONT,transition:"all 0.15s",whiteSpace:"nowrap"});
@@ -1654,6 +1663,12 @@ No markdown, no backticks.
                   <label style={ST.label}>Claude Model <span style={{textTransform:"none",color:"#c4bfb8"}}>(scene, hook, caption, tuples)</span></label>
                   <select value={claudeModel} onChange={e=>setClaudeModel(e.target.value)} style={{...ST.input,cursor:"pointer",appearance:"auto",fontFamily:"'DM Sans', sans-serif",fontSize:"13px"}}>
                     {CLAUDE_MODELS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={ST.label}>Effort <span style={{textTransform:"none",color:"#c4bfb8"}}>(higher = deeper reasoning, slower &amp; pricier)</span></label>
+                  <select value={effort} onChange={e=>setEffort(e.target.value)} style={{...ST.input,cursor:"pointer",appearance:"auto",fontFamily:"'DM Sans', sans-serif",fontSize:"13px"}}>
+                    {(EFFORT_BY_MODEL[claudeModel]||["high"]).map(lv=><option key={lv} value={lv}>{lv.charAt(0).toUpperCase()+lv.slice(1)}{lv==="high"?" (default)":""}</option>)}
                   </select>
                 </div>
               </div>
