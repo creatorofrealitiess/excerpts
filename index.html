@@ -1032,7 +1032,7 @@ function BookTokApp(){
   const[scanning,setScanning]=useState(false);
   const[scanError,setScanError]=useState("");
   const[letClaudeChoose,setLetClaudeChoose]=useState(false);
-  const APP_VERSION="v7";
+  const APP_VERSION="v8";
   // Cache tracking — reflects the real Anthropic usage object from the last book-reading call
   const[cacheInfo,setCacheInfo]=useState(null); // {status:'hit'|'write'|'miss', at:timestamp}
   const[cacheNow,setCacheNow]=useState(Date.now());
@@ -1398,26 +1398,29 @@ ${VIBES.map(v=>`- ${v}`).join("\n")}`;
   },[apiKey,anthropicKey,claudeModel,model,pdfText,selectedVibe,customVibe,selectedBook,useGeminiFallback,letClaudeChoose,geminiRetryFetch,callSonnetScene,tuplesArrayToRaw]);
 
   // Auto-scan tropes when a book is selected (skips if cached or no Claude key)
+  const scanInFlightFor=useRef(null);
   useEffect(()=>{
-    if(!selectedBook||bookScan||scanning)return;
+    if(!selectedBook)return;
     if(selectedBook.tropeScan){setBookScan(selectedBook.tropeScan);return}
+    if(bookScan)return; // already have a scan for the current selection
     if(!anthropicKey.trim())return; // scan needs Claude; silently skip if key not yet entered
-    let cancelled=false;
+    if(scanInFlightFor.current===selectedBook.id)return; // a scan for this book is already running
+    const bookId=selectedBook.id;
+    const bookText=selectedBook.pdfText;
+    scanInFlightFor.current=bookId;
+    setScanning(true);setScanError("");
     (async()=>{
-      setScanning(true);setScanError("");
       try{
-        const scan=await scanBookTropes(selectedBook.pdfText);
-        if(cancelled)return;
+        const scan=await scanBookTropes(bookText);
         setBookScan(scan);
-        const updated={...selectedBook,tropeScan:scan};
-        setSelectedBook(updated);
-        setBooks(prev=>prev.map(b=>b.id===updated.id?updated:b));
-        dbPutBook(updated).catch(()=>{});
-      }catch(e){if(!cancelled)setScanError(e.message)}
-      finally{if(!cancelled)setScanning(false)}
+        // Persist WITHOUT mutating selectedBook (which would retrigger this effect and stick the spinner)
+        setBooks(prev=>prev.map(b=>b.id===bookId?{...b,tropeScan:scan}:b));
+        const all=await dbGetBooks();const target=all.find(b=>b.id===bookId);
+        if(target)dbPutBook({...target,tropeScan:scan}).catch(()=>{});
+      }catch(e){setScanError(e.message)}
+      finally{setScanning(false);if(scanInFlightFor.current===bookId)scanInFlightFor.current=null}
     })();
-    return ()=>{cancelled=true};
-  },[selectedBook,bookScan,scanning,anthropicKey,scanBookTropes]);
+  },[selectedBook,bookScan,anthropicKey,scanBookTropes]);
 
   // Generate a character/relationship summary from Gemini for Hook Forge context
   const generateBookSummary=useCallback(async(bookText)=>{
