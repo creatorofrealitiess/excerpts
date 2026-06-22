@@ -40,7 +40,7 @@ const COLOR_MAP = {
   male_italic_underline: "#B5CDFD", female_italic_underline: "#FEC2D3", internal_italic_underline: "#FFF8B3", other_italic_underline: "#FDD9B0", narrative_italic_underline: null,
 };
 const VIBES = ["Bantering & Sexual Tension","Angst","Possessive / Jealousy","Forced Proximity","Enemies to Lovers Turning Point","Soft Vulnerability","Dark & Obsessive","Touch Her and Die","He Falls First","Grumpy / Sunshine","Slow Burn Payoff","Forbidden"];
-const GEMINI_MODELS = [{id:"gemini-3-pro-preview",label:"Gemini 3 Pro"},{id:"gemini-3.1-pro-preview",label:"Gemini 3.1 Pro (newest)"},{id:"gemini-3-flash-preview",label:"Gemini 3 Flash"}];
+const GEMINI_MODELS = [{id:"gemini-3.1-pro-preview",label:"Gemini 3.1 Pro"},{id:"gemini-3.5-flash",label:"Gemini 3.5 Flash"}];
 const FONT_OPTIONS = ["Lora","Literata","Gupter","Crimson Text","Source Serif 4","Merriweather","EB Garamond","DejaVu Serif"];
 const DEJAVU_CDN = "https://cdn.jsdelivr.net/gh/dejavu-fonts/dejavu-fonts@master/ttf/DejaVuSerif.ttf";
 const UI_FONT = "'DM Sans', -apple-system, sans-serif";
@@ -345,6 +345,75 @@ OUTPUT FORMAT:
 - Start with [ and end with ]
 - Use DOUBLED straight quotes "" for dialogue marks inside strings — NOT escaped quotes, NOT curly quotes.
 - Example: (""Hello,"", "male_flow") — the outer " are string delimiters, inner "" are dialogue marks.`;
+
+// Sonnet ALL-IN-ONE: read the whole book, pick the scene, return assets + pre-formatted tuples
+const SONNET_SCENE_PROMPT = `You are a viral BookTok strategist AND a precise text formatter. You will be given the FULL TEXT of a romance novel and a target vibe/trope. Your job is to find the single best scene matching that vibe, then output marketing assets plus a faithfully formatted excerpt.
+
+=== STEP 1: FIND THE BEST SCENE ===
+Read the book and locate the strongest moment matching the requested vibe/trope. The scene must:
+- Genuinely match the vibe — not a loosely related moment. If the vibe is "possessive / jealousy", the scene must actually show possessiveness or jealousy, not just two characters near each other.
+- Be a high-emotional-charge beat that lands OUT OF CONTEXT for a stranger scrolling TikTok.
+- Have a clear dynamic between the two leads.
+- Be dialogue-heavy: short back-and-forth exchanges, not long narrative paragraphs. Dialogue + internal thought should be 60-70%+ of the words.
+- If the most on-vibe moment is too narrative-heavy, pick the closest dialogue-dense beat within the same scene.
+
+Pick the SINGLE best contiguous passage of roughly 100-175 words. Do NOT stitch together separate parts of the book — it must be one continuous passage exactly as written.
+
+=== STEP 2: PRODUCE THE ASSETS ===
+Output a JSON object (and NOTHING else — no markdown, no backticks, no preamble) with these exact keys:
+
+{
+  "hook": "ONE punchy sentence, third person, 10-15 words max, high curiosity",
+  "caption": "multi-line caption, see format below",
+  "context": "2-4 sentences describing the scene",
+  "tuples": [ ...the formatted excerpt as an array, see rules below... ]
+}
+
+CAPTION format (use real newline characters \\n inside the string):
+[short emotional reaction, max 5-6 words, NO emoji]
+📚 : [Title In Title Case] by [Author Name]
+— [trope, lowercase]
+— [trope, lowercase]
+(3-5 tropes, each prefixed with — em dash, lowercase)
+
+=== STEP 3: FORMAT THE EXCERPT INTO TUPLES ===
+The "tuples" value must be a JSON array of two-element arrays: ["text content", "tag"].
+(JSON array form of the Python tuple system — ["text","tag"], not ("text","tag").)
+
+COPY THE PASSAGE EXACTLY as written in the book. Do NOT paraphrase, reword, merge, or condense any dialogue. Transcribe, don't rewrite. Every separate line in the book is a separate tuple.
+
+CHARACTER TAGS:
+- male = male character's dialogue
+- female = female character's dialogue (or first-person narrator who is female)
+- narrative = narration, action, speech tags (he said, she whispered)
+- internal = internal thought
+- other = other characters
+
+MODIFIER SUFFIXES (combine freely):
+- _flow = dialogue continues onto the speech tag in the NEXT tuple, on the same visual line
+- _underline = emotional peak — use on EXACTLY ONE tuple, the single most intense line
+- _bold, _italic = styling
+- e.g. male_flow, female_bold, male_italic_flow, female_bold_italic_underline
+
+DIALOGUE MARKS:
+- Use DOUBLED straight quotes "" as the dialogue marks INSIDE the string.
+- Example: ["""Hello there,""", "male"] — wait, that is wrong. Correct JSON: the string value is  ""Hello there,""  so in JSON it appears as "\\"\\"Hello there,\\"\\"".
+- In plain terms: every dialogue string both OPENS and CLOSES with two straight double-quote characters. Do NOT use curly/smart quotes.
+
+_flow RULE (same line: dialogue + speech tag → two tuples):
+"Stay," she whispered.   →   [""Stay,"" , "female_flow"], [" she whispered.", "narrative"]
+"What are you doing?" I asked.   →   [""What are you doing?"", "female_flow"], [" I asked.", "narrative"]
+- _flow applies before commas, question marks, AND exclamation marks.
+- ONLY the speech-tag continuation in a _flow pair starts with a leading space.
+- Standalone dialogue on its own line = plain tag, no _flow: [""Say it."", "male"]
+
+SPLITTING — CRITICAL:
+- EVERY tuple is ONLY dialogue OR ONLY narration, never both.
+- Two dialogue lines on separate lines = two separate tuples. Never merge.
+
+CENSORSHIP: censor explicit words — f*ck, sh*t, d*mn, c*ck, cl*t, p*ssy, d*ck, c*m, c*nt, m*ans, po*nd, etc.
+
+Output ONLY the JSON object. It must start with { and end with }.`;
 
 // === IndexedDB v3 with categories + books ===
 const DB_NAME="booktok_photos", DB_VER=3, STORE="photos", CAT_STORE="categories", BOOK_STORE="books";
@@ -909,7 +978,9 @@ function BookTokApp(){
   const[anthropicKey,setAnthropicKey]=useState("");
   const[claudeModel,setClaudeModel]=useState("claude-sonnet-4-6");
   const CLAUDE_MODELS = [{id:"claude-sonnet-4-6",label:"Sonnet 4.6"},{id:"claude-opus-4-6",label:"Opus 4.6"}];
-  const[model,setModel]=useState("gemini-3-flash-preview");
+  const[model,setModel]=useState("gemini-3.1-pro-preview");
+  const[useGeminiFallback,setUseGeminiFallback]=useState(false); // Sonnet does excerpts by default; this opts back into the old Gemini path
+  const[showFallback,setShowFallback]=useState(false);
   const[pdfFile,setPdfFile]=useState(null);
   const[pdfText,setPdfText]=useState("");
   const[selectedVibe,setSelectedVibe]=useState("");
@@ -1117,7 +1188,8 @@ const baseName=fileArr[0].name.replace(/\.\w+$/,'').replace(/[_\-\s]*(bold[_\-\s
 
   const handlePDF=useCallback(async(file)=>{if(!file||file.type!=='application/pdf'){setError("Please upload a PDF file.");return}setPdfFile(file);setError("");setLoadingStatus("Extracting text...");setLoading(true);try{const t=await extractPDFText(file);if(!t.trim())throw new Error("No text found");setPdfText(t);setLoading(false);setLoadingStatus("")}catch(e){setError("Extract failed: "+e.message);setLoading(false);setLoadingStatus("")}},[]);
 
-  const useHybrid = !!anthropicKey.trim();
+  const geminiActive = useGeminiFallback && !!apiKey.trim();
+  const generateLabel = geminiActive ? "Generate — Gemini Fallback" : "Generate with Claude";
 
   // Retry helper for Gemini API calls — retries up to 3 times with delay
   const geminiRetryFetch=useCallback(async(url,options,label)=>{
@@ -1141,26 +1213,76 @@ const baseName=fileArr[0].name.replace(/\.\w+$/,'').replace(/[_\-\s]*(bold[_\-\s
     throw new Error("Gemini failed after "+MAX_RETRIES+" attempts")
   },[]);
 
+  // Convert Sonnet's JSON tuples array -> the (""text"", "tag") string the renderer expects
+  const tuplesArrayToRaw=useCallback((arr)=>{
+    if(!Array.isArray(arr))return "";
+    const lines=arr.map(pair=>{
+      if(!Array.isArray(pair)||pair.length<2)return null;
+      let [text,tag]=pair;
+      if(typeof text!=="string"||typeof tag!=="string")return null;
+      tag=tag.trim();
+      // Narrative/internal/action tuples are NOT wrapped in dialogue marks; dialogue tuples are.
+      const isDialogue=/^(male|female|other)(_|$)/.test(tag) && !/^narrative/.test(tag);
+      // If the model already included doubled quotes, don't double them again.
+      const hasMarks=text.startsWith('""')&&text.endsWith('""');
+      const body=(isDialogue&&!hasMarks)?`""${text}""`:text;
+      return `("${body}", "${tag}")`;
+    }).filter(Boolean);
+    return "[\n"+lines.join(",\n")+"\n]";
+  },[]);
+
+  // Sonnet-first: one call reads the whole book, picks the scene, returns assets + tuples
+  const callSonnetScene=useCallback(async(vibe,bookText)=>{
+    const truncated=bookText.length>600000?bookText.substring(0,600000):bookText;
+    setLoadingStatus("Claude: Reading book & finding scene...");
+    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:4096,messages:[{role:"user",content:`${SONNET_SCENE_PROMPT}\n\nVibe/Trope to find: ${vibe}\n\n=== FULL BOOK TEXT ===\n${truncated}`}]})});
+    if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error("Claude: "+(e?.error?.message||`API ${res.status}`))}
+    const data=await res.json();const text=data?.content?.[0]?.text;
+    if(!text)throw new Error("Claude returned an empty response. Try again.");
+    let clean=text.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
+    // Be forgiving: pull the outermost {...} if there's any stray text around it
+    const s=clean.indexOf('{'),en=clean.lastIndexOf('}');
+    if(s>=0&&en>s)clean=clean.substring(s,en+1);
+    let obj;
+    try{obj=JSON.parse(clean)}catch(err){throw new Error("Claude's response wasn't valid JSON. Try regenerating.")}
+    if(!obj.tuples||!Array.isArray(obj.tuples)||obj.tuples.length===0)throw new Error("Claude didn't return an excerpt. Try again.");
+    return obj;
+  },[anthropicKey,claudeModel]);
+
   const callGemini=useCallback(async()=>{
-    if(!apiKey.trim()){setError("Please enter your Gemini API key.");return}
     if(!pdfText.trim()){setError("No book selected or PDF text extracted.");return}
     const vibe=customVibe.trim()||selectedVibe;if(!vibe){setError("Please select or enter a vibe.");return}
+    const geminiPath=useGeminiFallback&&apiKey.trim();
+    if(!geminiPath&&!anthropicKey.trim()){setError("Please enter your Claude API key (or enable the Gemini fallback in settings).");return}
+    if(geminiPath&&!apiKey.trim()){setError("Gemini fallback is on but no Gemini API key is set.");return}
     setError("");setLoading(true);
     const truncated=pdfText.length>300000?pdfText.substring(0,300000):pdfText;
     const geminiUrl=`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
     const geminiOpts=(prompt)=>({method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.9,maxOutputTokens:8192}})});
 
-    if(useHybrid){
-      // === HYBRID MODE: Gemini finds scene → Sonnet formats tuples ===
+    if(!geminiPath){
+      // === SONNET MODE (default): one call reads book, picks scene, returns tuples ===
       try{
-        // Step 1: Gemini finds the scene (with retry)
+        const obj=await callSonnetScene(vibe,pdfText);
+        setHook(obj.hook||"");
+        const _sc=splitReactionFromCaption(obj.caption||"");setReaction(_sc.reaction);setCaption(_sc.caption);setContext(obj.context||"");
+        const bm=(obj.caption||"").match(/\uD83D\uDCDA\s*:?\s*(.+?)(?:\n|$)/);if(bm)setAuthor(bm[1].trim());else if(selectedBook)setAuthor(`${selectedBook.title} by ${selectedBook.author}`);
+        const rawTuple=tuplesArrayToRaw(obj.tuples);
+        const fixedTuple=autoFixFlowTags(rawTuple);
+        setTupleRaw(fixedTuple);
+        setStep("results");setActiveTab("excerpt");setLoading(false);setLoadingStatus("");
+        if(fixedTuple)setTimeout(()=>autoRender(fixedTuple),300);
+        generateBookSummary(truncated);
+      }catch(e){setError(e.message);setLoading(false);setLoadingStatus("")}
+
+    } else if(anthropicKey.trim()){
+      // === FALLBACK HYBRID: Gemini finds scene → Sonnet formats tuples ===
+      try{
         const gemText=await geminiRetryFetch(geminiUrl,geminiOpts(`${GEMINI_SCENE_PROMPT}\n\nVibe/Trope to find: ${vibe}\n\nBook text:\n${truncated}`),"Gemini: Finding scene");
         const scene=parseGeminiSceneResponse(gemText);
         if(!scene.excerpt)throw new Error("Gemini didn't return an excerpt. Try again.");
         setHook(scene.hook);const _sc=splitReactionFromCaption(scene.caption);setReaction(_sc.reaction);setCaption(_sc.caption);setContext(scene.context);
         const bm=scene.caption.match(/\uD83D\uDCDA\s*:?\s*(.+?)(?:\n|$)/);if(bm)setAuthor(bm[1].trim());else if(selectedBook)setAuthor(`${selectedBook.title} by ${selectedBook.author}`);
-
-        // Step 2: Sonnet formats into tuples
         setLoadingStatus("Claude: Formatting tuples...");
         const sonRes=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:4096,messages:[{role:"user",content:`${SONNET_TUPLE_PROMPT}\n\nHere is the excerpt to format:\n\n${scene.excerpt}`}]})});
         if(!sonRes.ok){const e=await sonRes.json().catch(()=>({}));throw new Error("Sonnet: "+(e?.error?.message||`API ${sonRes.status}`))}
@@ -1170,23 +1292,21 @@ const baseName=fileArr[0].name.replace(/\.\w+$/,'').replace(/[_\-\s]*(bold[_\-\s
         setTupleRaw(fixedTuple);
         setStep("results");setActiveTab("excerpt");setLoading(false);setLoadingStatus("");
         if(fixedTuple)setTimeout(()=>autoRender(fixedTuple),300);
-        // Generate book summary for Hook Forge (runs in background)
         generateBookSummary(truncated);
       }catch(e){setError(e.message);setLoading(false);setLoadingStatus("")}
 
     } else {
-      // === GEMINI-ONLY MODE (original behavior, with retry) ===
+      // === FALLBACK GEMINI-ONLY: Gemini does everything ===
       try{
         const text=await geminiRetryFetch(geminiUrl,geminiOpts(`${GEMINI_SYSTEM_PROMPT}\n\nVibe/Trope to find: ${vibe}\n\nBook text:\n${truncated}`),"Sending to Gemini");
         const parsed=parseGeminiResponse(text);const fixedTuple=parsed.tupleRaw?autoFixFlowTags(parsed.tupleRaw):parsed.tupleRaw;setHook(parsed.hook);const _pc=splitReactionFromCaption(parsed.caption);setReaction(_pc.reaction);setCaption(_pc.caption);setContext(parsed.context);setTupleRaw(fixedTuple);
         const bm=parsed.caption.match(/\uD83D\uDCDA\s*:?\s*(.+?)(?:\n|$)/);if(bm)setAuthor(bm[1].trim());else if(selectedBook)setAuthor(`${selectedBook.title} by ${selectedBook.author}`);
         setStep("results");setActiveTab("excerpt");setLoading(false);setLoadingStatus("");
         if(fixedTuple)setTimeout(()=>autoRender(fixedTuple),300);
-        // Generate book summary for Hook Forge (runs in background)
         generateBookSummary(truncated);
       }catch(e){setError("Gemini error: "+e.message);setLoading(false);setLoadingStatus("")}
     }
-  },[apiKey,anthropicKey,claudeModel,model,pdfText,selectedVibe,customVibe,selectedBook,useHybrid,geminiRetryFetch]);
+  },[apiKey,anthropicKey,claudeModel,model,pdfText,selectedVibe,customVibe,selectedBook,useGeminiFallback,geminiRetryFetch,callSonnetScene,tuplesArrayToRaw]);
 
   // Generate a character/relationship summary from Gemini for Hook Forge context
   const generateBookSummary=useCallback(async(bookText)=>{
@@ -1480,7 +1600,7 @@ No markdown, no backticks.
         <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
           {step==="results"&&<button onClick={resetAll} style={{...ST.btn,backgroundColor:"transparent",color:"#6b6660",border:"1px solid #e8e6e1",fontSize:"11px",padding:"6px 14px",borderRadius:"20px"}}>← New Book</button>}
           {step!=="results"&&<button onClick={()=>{setStep("results");setActiveTab("excerpt")}} style={{...ST.btn,backgroundColor:"transparent",color:"#a09a93",border:"1px solid #e8e6e1",fontSize:"11px",padding:"6px 14px",borderRadius:"20px"}}>Skip to Excerpt ↗</button>}
-          <span style={{fontSize:"10px",color:"#a09a93"}}>gemini + claude</span>
+          <span style={{fontSize:"10px",color:"#a09a93"}}>{geminiActive?"gemini + claude":"claude"}</span>
         </div>
       </div>
 
@@ -1522,43 +1642,61 @@ No markdown, no backticks.
             <div style={{animation:"fadeIn 0.25s ease"}}>
               <div style={{marginBottom:"24px"}}>
                 <h3 style={{fontFamily:"'Fraunces',serif",fontSize:"20px",fontWeight:700,color:"#1a1815",marginBottom:"4px"}}>Connect your AI</h3>
-                <p style={{fontSize:"12px",color:"#a09a93",fontFamily:UI_FONT}}>Add your API keys to power the excerpt generator.</p>
+                <p style={{fontSize:"12px",color:"#a09a93",fontFamily:UI_FONT}}>Claude reads the book and finds your excerpt.</p>
               </div>
 
               <div style={{...ST.card,display:"flex",flexDirection:"column",gap:"16px",marginBottom:"16px"}}>
                 <div>
-                  <label style={ST.label}>Gemini API Key</label>
-                  <input type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="Paste your Gemini API key" style={{...ST.input,fontFamily:"'DM Sans', sans-serif",fontSize:"13px"}} />
-                </div>
-                <div>
-                  <label style={ST.label}>Anthropic API Key <span style={{textTransform:"none",color:"#c4bfb8"}}>(optional — enables hybrid mode)</span></label>
+                  <label style={ST.label}>Claude API Key</label>
                   <input type="password" value={anthropicKey} onChange={e=>setAnthropicKey(e.target.value)} placeholder="Paste your Anthropic API key" style={{...ST.input,fontFamily:"'DM Sans', sans-serif",fontSize:"13px"}} />
                 </div>
                 <div>
-                  <label style={ST.label}>Gemini Model</label>
-                  <select value={model} onChange={e=>setModel(e.target.value)} style={{...ST.input,cursor:"pointer",appearance:"auto",fontFamily:"'DM Sans', sans-serif",fontSize:"13px"}}>
-                    {GEMINI_MODELS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
-                  </select>
-                </div>
-                {anthropicKey.trim()&&(<div>
-                  <label style={ST.label}>Claude Model <span style={{textTransform:"none",color:"#c4bfb8"}}>(hooks, captions, tuples)</span></label>
+                  <label style={ST.label}>Claude Model <span style={{textTransform:"none",color:"#c4bfb8"}}>(scene, hook, caption, tuples)</span></label>
                   <select value={claudeModel} onChange={e=>setClaudeModel(e.target.value)} style={{...ST.input,cursor:"pointer",appearance:"auto",fontFamily:"'DM Sans', sans-serif",fontSize:"13px"}}>
                     {CLAUDE_MODELS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
                   </select>
-                </div>)}
+                </div>
+              </div>
+
+              {/* Advanced: Gemini fallback (collapsed by default) */}
+              <div style={{...ST.card,marginBottom:"16px",padding:"0",overflow:"hidden"}}>
+                <button onClick={()=>setShowFallback(s=>!s)} style={{width:"100%",background:"transparent",border:"none",padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",fontFamily:UI_FONT}}>
+                  <span style={{fontSize:"11px",color:"#a09a93",letterSpacing:"0.3px"}}>Advanced — Gemini fallback</span>
+                  <span style={{fontSize:"11px",color:"#c4bfb8"}}>{showFallback?"−":"+"}</span>
+                </button>
+                {showFallback&&(
+                  <div style={{padding:"4px 16px 16px",display:"flex",flexDirection:"column",gap:"14px",borderTop:"1px solid #f0eeea"}}>
+                    <label style={{display:"flex",alignItems:"center",gap:"10px",cursor:"pointer",fontSize:"12px",color:"#6b6660"}}>
+                      <input type="checkbox" checked={useGeminiFallback} onChange={e=>setUseGeminiFallback(e.target.checked)} style={{cursor:"pointer"}} />
+                      Use Gemini to find scenes instead of Claude
+                    </label>
+                    <div>
+                      <label style={ST.label}>Gemini API Key</label>
+                      <input type="password" value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="Paste your Gemini API key" style={{...ST.input,fontFamily:"'DM Sans', sans-serif",fontSize:"13px"}} />
+                    </div>
+                    <div>
+                      <label style={ST.label}>Gemini Model</label>
+                      <select value={model} onChange={e=>setModel(e.target.value)} style={{...ST.input,cursor:"pointer",appearance:"auto",fontFamily:"'DM Sans', sans-serif",fontSize:"13px"}}>
+                        {GEMINI_MODELS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Mode indicator */}
-              <div style={{marginBottom:"24px",padding:"10px 14px",borderRadius:"8px",backgroundColor:anthropicKey.trim()?"#edf7f1":"#faf9f7",border:`1px solid ${anthropicKey.trim()?"#c3e6cb":"#e8e6e1"}`,display:"flex",alignItems:"center",gap:"10px"}}>
-                <div style={{width:"8px",height:"8px",borderRadius:"50%",backgroundColor:anthropicKey.trim()?"#2da562":"#c4bfb8"}} />
-                <span style={{fontSize:"11px",color:anthropicKey.trim()?"#2da562":"#a09a93"}}>
-                  {anthropicKey.trim()?"Hybrid Mode: Gemini finds scenes → Claude formats tuples":"Gemini-Only Mode: add Anthropic key to enable hybrid pipeline"}
+              {(()=>{const gem=useGeminiFallback&&apiKey.trim();const ready=gem||anthropicKey.trim();return(
+              <div style={{marginBottom:"24px",padding:"10px 14px",borderRadius:"8px",backgroundColor:ready?"#edf7f1":"#faf9f7",border:`1px solid ${ready?"#c3e6cb":"#e8e6e1"}`,display:"flex",alignItems:"center",gap:"10px"}}>
+                <div style={{width:"8px",height:"8px",borderRadius:"50%",backgroundColor:ready?"#2da562":"#c4bfb8"}} />
+                <span style={{fontSize:"11px",color:ready?"#2da562":"#a09a93"}}>
+                  {gem?"Fallback: Gemini finds scenes → Claude formats tuples":anthropicKey.trim()?"Claude Mode: Claude reads the book, finds the scene & formats tuples":"Add your Claude API key to begin"}
                 </span>
-              </div>
+              </div>);})()}
 
-              <button onClick={()=>setWizardStep(2)} disabled={!apiKey.trim()} style={{...ST.btn,width:"100%",padding:"14px",backgroundColor:!apiKey.trim()?"#f0eeea":"#e85d3a",color:!apiKey.trim()?"#a09a93":"#fff",fontSize:"14px",borderRadius:"10px"}}>
+              {(()=>{const ready=(useGeminiFallback&&apiKey.trim())||anthropicKey.trim();return(
+              <button onClick={()=>setWizardStep(2)} disabled={!ready} style={{...ST.btn,width:"100%",padding:"14px",backgroundColor:!ready?"#f0eeea":"#e85d3a",color:!ready?"#a09a93":"#fff",fontSize:"14px",borderRadius:"10px"}}>
                 Continue →
-              </button>
+              </button>);})()}
             </div>
           )}
 
@@ -1670,7 +1808,7 @@ No markdown, no backticks.
               <div style={{display:"flex",gap:"10px"}}>
                 <button onClick={()=>setWizardStep(2)} style={{...ST.btn,padding:"14px 20px",backgroundColor:"transparent",color:"#a09a93",border:"1px solid #e8e6e1",fontSize:"13px",borderRadius:"10px"}}>← Back</button>
                 <button onClick={callGemini} disabled={loading||(!selectedVibe&&!customVibe.trim())} style={{...ST.btn,flex:1,padding:"14px",backgroundColor:loading||(!selectedVibe&&!customVibe.trim())?"#f0eeea":"#e85d3a",color:loading||(!selectedVibe&&!customVibe.trim())?"#a09a93":"#fff",fontSize:"14px",borderRadius:"10px"}}>
-                  {loading?(<span style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"8px"}}><span style={{display:"inline-block",width:"14px",height:"14px",border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 0.8s linear infinite"}} />{loadingStatus}</span>):(useHybrid?"Generate — Hybrid Mode":"Generate BookTok Assets")}
+                  {loading?(<span style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"8px"}}><span style={{display:"inline-block",width:"14px",height:"14px",border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 0.8s linear infinite"}} />{loadingStatus}</span>):generateLabel}
                 </button>
               </div>
             </div>
