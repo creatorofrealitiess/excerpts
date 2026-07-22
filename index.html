@@ -353,17 +353,24 @@ const SONNET_SCENE_PROMPT = `You are a viral BookTok strategist AND a precise te
 This excerpt is ALWAYS slide 2 of a 2-slide TikTok: slide 1 is a hook that sets up a promise, and THIS excerpt must PAY THAT PROMISE OFF. The single most important quality of a viral pick is that it BUILDS to a detonating final line. Judge every candidate scene by its last line first.
 
 The scene MUST have ALL of these:
-- A DETONATING FINAL LINE. The excerpt ends on a beat that recontextualizes, confesses, claims, or gut-punches everything above it — e.g. a possessive claim ("No other man sends you flowers"), a sudden confession ("Like I want to kiss you?"), or a reversal that flips a fight into caring ("I don't give a damn about the team if it's making you this upset"). If the last line is a flat mic-drop that assumes context the viewer lacks ("Trust me, I'm aware"), REJECT it — that is not a payoff.
+- A DETONATING FINAL LINE THAT IS SELF-CONTAINED. The excerpt ends on a beat that recontextualizes, confesses, claims, or gut-punches everything above it — e.g. a possessive claim ("No other man sends you flowers"), a sudden confession ("Like I want to kiss you?"), or a reversal that flips a fight into caring ("I don't give a damn about the team if it's making you this upset"). CRITICAL TEST: a stranger who reads ONLY your excerpt — nothing before it in the book — must fully understand and FEEL the last line. If the last line is a callback or answer to something that happens OUTSIDE your excerpt, it will read as a confusing fragment and FAILS. Example of a FAILURE: ending on "You know how to make me." — out of context nobody knows what "make me" refers to; it's answering an earlier line the viewer never saw. Either extend the excerpt to INCLUDE the line it's answering (so the exchange completes inside the excerpt), or pick a different, self-contained payoff. Also reject flat mic-drops that assume context ("Trust me, I'm aware").
 - A HOOK↔PAYOFF PAIRING. You must be able to write a slide-1 hook that teases a promise which THIS excerpt's final line then delivers. If you cannot write a compelling hook that the last line pays off, the scene is wrong — keep looking.
 - ESCALATION WITHIN THE EXCERPT. Each beat raises tension toward that final line — denial → pressure → collapse, or accusation → counter → reversal. Not flat back-and-forth that stays at one emotional level.
 - GENUINE VIBE MATCH — the scene actually shows the requested vibe/trope, not two characters merely near each other.
 - Ideally, at least ONE physical/visual beat — a concrete action you can picture (throwing flowers in the bin, closing distance chest-to-back, tucking hair). This grounds the tension. Prefer scenes that have one.
 
+WHERE TO START AND END THE EXCERPT:
+- START on a line of DIALOGUE that begins the escalating exchange — NOT on a paragraph of narration or internal monologue. If the natural scene opens with narration, cut past it to the first charged line of dialogue.
+- END on the self-contained detonating line (see above). If the true payoff is an exchange (a line + its answer), include BOTH so it completes inside the excerpt.
+- The excerpt should read as a complete little scene with a beginning tension and an end release — not a slice ripped from the middle of a longer beat.
+
 HARD REJECT a scene if:
+- Its payoff line only makes sense with context from OUTSIDE the excerpt (callback fragment like "You know how to make me").
 - It is clever banter with no emotional pull — witty sparring that never turns or lands.
 - It opens mid-argument over stakes the viewer can't infer, with no turn that makes those stakes land emotionally by the end.
 - Its strongest line is in the MIDDLE, not at the end. (If a great payoff exists mid-scene, shift your passage window so that line becomes the LAST line.)
 - It's a first-meeting spar or logistics argument with no romantic/emotional charge building to a peak.
+- It opens on narration/internal monologue instead of dialogue.
 
 FORMAT REQUIREMENTS:
 - Dialogue-heavy: short back-and-forth exchanges, not long narrative paragraphs. Dialogue + internal thought should be 60-70%+ of the words.
@@ -377,7 +384,7 @@ First, fix in your mind the EXACT contiguous passage you selected in Step 1. Eve
 Output a JSON object (and NOTHING else — no markdown, no backticks, no preamble) with these exact keys:
 
 {
-  "payoff_line": "the EXACT last line of dialogue in your excerpt — the detonating line. Fill this FIRST, then write the hook to point straight at it. If this line is not a real payoff, go back to Step 1 and pick a different scene.",
+  "payoff_line": "the EXACT last line of your excerpt — the detonating line. Fill this FIRST. SELF-CONTAINMENT CHECK: would a stranger who read ONLY your excerpt understand and feel this line? If it answers or calls back to something outside the excerpt (like 'You know how to make me.'), it FAILS — either extend the excerpt to include the line it answers, or pick a different self-contained payoff. Then write the hook to point straight at it.",
   "hook": "ONE punchy sentence, 8-15 words, high curiosity. It must set up a promise that the payoff_line above DELIVERS — tease the turn without giving it away. Third person or the POV of the scene. Short and emotional beats hardest.",
   "caption": "multi-line caption, see format below",
   "context": "2-4 sentences describing THE EXACT scene in tuples — the same moment, same characters, same beat",
@@ -996,12 +1003,12 @@ function BookTokApp(){
   const[apiKey,setApiKey]=useState("");
   const[anthropicKey,setAnthropicKey]=useState("");
   const[claudeModel,setClaudeModel]=useState("claude-opus-4-8");
-  const CLAUDE_MODELS = [{id:"claude-opus-4-8",label:"Opus 4.8"},{id:"claude-opus-4-7",label:"Opus 4.7"},{id:"claude-sonnet-4-6",label:"Sonnet 4.6"}];
-  // Which effort levels each model accepts (xhigh is Opus-4.7/4.8 only; Sonnet 4.6 tops out at max without xhigh)
+  const CLAUDE_MODELS = [{id:"claude-opus-4-8",label:"Opus 4.8"},{id:"claude-opus-4-7",label:"Opus 4.7"},{id:"claude-sonnet-5",label:"Sonnet 5"}];
+  // Which effort levels each model accepts (Sonnet 5 supports xhigh too, unlike the old 4.6)
   const EFFORT_BY_MODEL = {
     "claude-opus-4-8": ["low","medium","high","xhigh","max"],
     "claude-opus-4-7": ["low","medium","high","xhigh","max"],
-    "claude-sonnet-4-6": ["low","medium","high","max"],
+    "claude-sonnet-5": ["low","medium","high","xhigh","max"],
   };
   const[effort,setEffort]=useState("high");
   const[model,setModel]=useState("gemini-3.1-pro-preview");
@@ -1050,7 +1057,7 @@ function BookTokApp(){
   const[scanning,setScanning]=useState(false);
   const[scanError,setScanError]=useState("");
   const[letClaudeChoose,setLetClaudeChoose]=useState(false);
-  const APP_VERSION="v10";
+  const APP_VERSION="v12";
   // Cache tracking — reflects the real Anthropic usage object from the last book-reading call
   const[cacheInfo,setCacheInfo]=useState(null); // {status:'hit'|'write'|'miss', at:timestamp}
   const[cacheNow,setCacheNow]=useState(Date.now());
