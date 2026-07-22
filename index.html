@@ -1057,7 +1057,7 @@ function BookTokApp(){
   const[scanning,setScanning]=useState(false);
   const[scanError,setScanError]=useState("");
   const[letClaudeChoose,setLetClaudeChoose]=useState(false);
-  const APP_VERSION="v13";
+  const APP_VERSION="v14";
   // Cache tracking — reflects the real Anthropic usage object from the last book-reading call
   const[cacheInfo,setCacheInfo]=useState(null); // {status:'hit'|'write'|'miss', at:timestamp}
   const[cacheNow,setCacheNow]=useState(Date.now());
@@ -1318,7 +1318,7 @@ const baseName=fileArr[0].name.replace(/\.\w+$/,'').replace(/[_\-\s]*(bold[_\-\s
     const vibeInstruction=chooseMode
       ? `Find the SINGLE strongest BookTok moment in this book — the scene most likely to stop a scroll and drive saves — regardless of which trope it fits. Then, in the JSON, add a "chosen_trope" key naming the trope it best represents (a short phrase).`
       : `Vibe/Trope to find: ${vibe}`;
-    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:ANTHROPIC_HEADERS,body:JSON.stringify({model:claudeModel,max_tokens:4096,output_config:{effort},system:buildCachedBookBlocks(bookText),messages:[{role:"user",content:`${SONNET_SCENE_PROMPT}\n\n${vibeInstruction}`}]})});
+    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:ANTHROPIC_HEADERS,body:JSON.stringify({model:claudeModel,max_tokens:8192,output_config:{effort},system:buildCachedBookBlocks(bookText),messages:[{role:"user",content:`${SONNET_SCENE_PROMPT}\n\n${vibeInstruction}`}]})});
     if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error("Claude: "+(e?.error?.message||`API ${res.status}`))}
     const data=await res.json();recordCacheUsage(data);
     // Find the text block — with extended thinking, content[0] may be a thinking block, not text.
@@ -1364,7 +1364,7 @@ Return ONLY a JSON object (no markdown, no preamble) mapping each EXACT trope st
 
 Trope list (use these EXACT strings as keys):
 ${VIBES.map(v=>`- ${v}`).join("\n")}`;
-    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:ANTHROPIC_HEADERS,body:JSON.stringify({model:claudeModel,max_tokens:2048,output_config:{effort},system:buildCachedBookBlocks(bookText),messages:[{role:"user",content:prompt}]})});
+    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:ANTHROPIC_HEADERS,body:JSON.stringify({model:claudeModel,max_tokens:6144,output_config:{effort},system:buildCachedBookBlocks(bookText),messages:[{role:"user",content:prompt}]})});
     if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error("Scan: "+(e?.error?.message||`API ${res.status}`))}
     const data=await res.json();recordCacheUsage(data);
     const text=anthropicText(data);
@@ -1423,7 +1423,7 @@ ${VIBES.map(v=>`- ${v}`).join("\n")}`;
         setHook(scene.hook);const _sc=splitReactionFromCaption(scene.caption);setReaction(_sc.reaction);setCaption(_sc.caption);setContext(scene.context);
         const bm=scene.caption.match(/\uD83D\uDCDA\s*:?\s*(.+?)(?:\n|$)/);if(bm)setAuthor(bm[1].trim());else if(selectedBook)setAuthor(`${selectedBook.title} by ${selectedBook.author}`);
         setLoadingStatus("Claude: Formatting tuples...");
-        const sonRes=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:4096,output_config:{effort},messages:[{role:"user",content:`${SONNET_TUPLE_PROMPT}\n\nHere is the excerpt to format:\n\n${scene.excerpt}`}]})});
+        const sonRes=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:8192,output_config:{effort},messages:[{role:"user",content:`${SONNET_TUPLE_PROMPT}\n\nHere is the excerpt to format:\n\n${scene.excerpt}`}]})});
         if(!sonRes.ok){const e=await sonRes.json().catch(()=>({}));throw new Error("Sonnet: "+(e?.error?.message||`API ${sonRes.status}`))}
         const sonData=await sonRes.json();const sonText=anthropicText(sonData);if(!sonText)throw new Error("Sonnet returned empty response");
         const cleanTuple=sonText.trim().replace(/^```(?:python)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
@@ -1707,7 +1707,7 @@ No markdown, no backticks.
     setSwapLoading(true);setSwapError("");
     try{
       // Step 1: Format tuples
-      const sonRes=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:4096,output_config:{effort},messages:[{role:"user",content:`${SONNET_TUPLE_PROMPT}\n\nHere is the excerpt to format:\n\n${swapText.trim()}`}]})});
+      const sonRes=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:8192,output_config:{effort},messages:[{role:"user",content:`${SONNET_TUPLE_PROMPT}\n\nHere is the excerpt to format:\n\n${swapText.trim()}`}]})});
       if(!sonRes.ok){const e=await sonRes.json().catch(()=>({}));throw new Error("Tuple formatting: "+(e?.error?.message||`API ${sonRes.status}`))}
       const sonData=await sonRes.json();const sonText=anthropicText(sonData);if(!sonText)throw new Error("Tuple formatting returned empty");
       const cleanTuple=sonText.trim().replace(/^```(?:python)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
