@@ -1057,7 +1057,7 @@ function BookTokApp(){
   const[scanning,setScanning]=useState(false);
   const[scanError,setScanError]=useState("");
   const[letClaudeChoose,setLetClaudeChoose]=useState(false);
-  const APP_VERSION="v12";
+  const APP_VERSION="v13";
   // Cache tracking — reflects the real Anthropic usage object from the last book-reading call
   const[cacheInfo,setCacheInfo]=useState(null); // {status:'hit'|'write'|'miss', at:timestamp}
   const[cacheNow,setCacheNow]=useState(Date.now());
@@ -1303,6 +1303,16 @@ const baseName=fileArr[0].name.replace(/\.\w+$/,'').replace(/[_\-\s]*(bold[_\-\s
     setCacheInfo({status,at:Date.now(),read,write});
   },[]);
 
+  // Extract the text block from an Anthropic response. With extended thinking on,
+  // content[0] can be a thinking block, so scan for the actual text block.
+  const anthropicText=useCallback((data)=>{
+    if(Array.isArray(data?.content)){
+      const t=data.content.find(b=>b&&b.type==='text');
+      return t?.text||"";
+    }
+    return data?.content?.[0]?.text||"";
+  },[]);
+
   const callSonnetScene=useCallback(async(vibe,bookText,chooseMode=false)=>{
     setLoadingStatus(chooseMode?"Claude: Finding the strongest scene...":"Claude: Reading book & finding scene...");
     const vibeInstruction=chooseMode
@@ -1310,8 +1320,15 @@ const baseName=fileArr[0].name.replace(/\.\w+$/,'').replace(/[_\-\s]*(bold[_\-\s
       : `Vibe/Trope to find: ${vibe}`;
     const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:ANTHROPIC_HEADERS,body:JSON.stringify({model:claudeModel,max_tokens:4096,output_config:{effort},system:buildCachedBookBlocks(bookText),messages:[{role:"user",content:`${SONNET_SCENE_PROMPT}\n\n${vibeInstruction}`}]})});
     if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error("Claude: "+(e?.error?.message||`API ${res.status}`))}
-    const data=await res.json();recordCacheUsage(data);const text=data?.content?.[0]?.text;
-    if(!text)throw new Error("Claude returned an empty response. Try again.");
+    const data=await res.json();recordCacheUsage(data);
+    // Find the text block — with extended thinking, content[0] may be a thinking block, not text.
+    const text=anthropicText(data);
+    if(!text){
+      const stop=data?.stop_reason?` (stop_reason: ${data.stop_reason})`:"";
+      const blocks=Array.isArray(data?.content)?data.content.map(b=>b&&b.type).filter(Boolean).join(", "):"none";
+      console.error("Claude scene — no text block. Blocks:",blocks,"Full response:",data);
+      throw new Error(`Claude returned no text block${stop}. Block types: [${blocks}]. Logged to console.`);
+    }
     let clean=text.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
     // Be forgiving: pull the outermost {...} if there's any stray text around it
     const s=clean.indexOf('{'),en=clean.lastIndexOf('}');
@@ -1349,7 +1366,8 @@ Trope list (use these EXACT strings as keys):
 ${VIBES.map(v=>`- ${v}`).join("\n")}`;
     const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:ANTHROPIC_HEADERS,body:JSON.stringify({model:claudeModel,max_tokens:2048,output_config:{effort},system:buildCachedBookBlocks(bookText),messages:[{role:"user",content:prompt}]})});
     if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error("Scan: "+(e?.error?.message||`API ${res.status}`))}
-    const data=await res.json();recordCacheUsage(data);const text=data?.content?.[0]?.text;
+    const data=await res.json();recordCacheUsage(data);
+    const text=anthropicText(data);
     if(!text)throw new Error("Scan returned empty.");
     let clean=text.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
     const s=clean.indexOf('{'),en=clean.lastIndexOf('}');if(s>=0&&en>s)clean=clean.substring(s,en+1);
@@ -1407,7 +1425,7 @@ ${VIBES.map(v=>`- ${v}`).join("\n")}`;
         setLoadingStatus("Claude: Formatting tuples...");
         const sonRes=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:4096,output_config:{effort},messages:[{role:"user",content:`${SONNET_TUPLE_PROMPT}\n\nHere is the excerpt to format:\n\n${scene.excerpt}`}]})});
         if(!sonRes.ok){const e=await sonRes.json().catch(()=>({}));throw new Error("Sonnet: "+(e?.error?.message||`API ${sonRes.status}`))}
-        const sonData=await sonRes.json();const sonText=sonData?.content?.[0]?.text;if(!sonText)throw new Error("Sonnet returned empty response");
+        const sonData=await sonRes.json();const sonText=anthropicText(sonData);if(!sonText)throw new Error("Sonnet returned empty response");
         const cleanTuple=sonText.trim().replace(/^```(?:python)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
         const fixedTuple=autoFixFlowTags(cleanTuple);
         setTupleRaw(fixedTuple);
@@ -1610,7 +1628,7 @@ HARD RULES:
 JSON only. No markdown, no backticks.
 [{"type":"short_emotional","hook":"..."},{"type":"short_emotional_alt","hook":"..."},{"type":"curiosity_gap","hook":"..."},{"type":"curiosity_gap_alt","hook":"..."},{"type":"female_pov","hook":"..."},{"type":"male_pov","hook":"..."},{"type":"trope_stack","hook":"..."}]`}]})});
       if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e?.error?.message||`API ${res.status}`)}
-      const data=await res.json();const txt=(data?.content?.[0]?.text||"").trim();
+      const data=await res.json();const txt=(anthropicText(data)||"").trim();
       // Parse JSON - handle potential markdown wrapping
       const clean=txt.replace(/^```(?:json)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
       const variants=JSON.parse(clean);
@@ -1641,7 +1659,7 @@ Return ONLY a JSON object with:
 No markdown, no backticks.
 {"tropes":["..."],"reaction":"...","pinterest_searches":["..."]}`}]})});
       if(!res.ok)throw new Error(`API ${res.status}`);
-      const data=await res.json();const txt=(data?.content?.[0]?.text||"").trim();
+      const data=await res.json();const txt=(anthropicText(data)||"").trim();
       const clean=txt.replace(/^```(?:json)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
       const result=JSON.parse(clean);
       if(result.tropes)setDetectedTropes(result.tropes);
@@ -1691,7 +1709,7 @@ No markdown, no backticks.
       // Step 1: Format tuples
       const sonRes=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:4096,output_config:{effort},messages:[{role:"user",content:`${SONNET_TUPLE_PROMPT}\n\nHere is the excerpt to format:\n\n${swapText.trim()}`}]})});
       if(!sonRes.ok){const e=await sonRes.json().catch(()=>({}));throw new Error("Tuple formatting: "+(e?.error?.message||`API ${sonRes.status}`))}
-      const sonData=await sonRes.json();const sonText=sonData?.content?.[0]?.text;if(!sonText)throw new Error("Tuple formatting returned empty");
+      const sonData=await sonRes.json();const sonText=anthropicText(sonData);if(!sonText)throw new Error("Tuple formatting returned empty");
       const cleanTuple=sonText.trim().replace(/^```(?:python)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
       const fixedTuple=autoFixFlowTags(cleanTuple);
       setTupleRaw(fixedTuple);
@@ -1714,7 +1732,7 @@ Return ONLY a JSON object with:
 No markdown, no backticks.
 {"hook":"...","reaction":"...","tropes":["..."],"pinterest_searches":["..."]}`}]})});
       if(!regenRes.ok){const e=await regenRes.json().catch(()=>({}));throw new Error("Regenerate: "+(e?.error?.message||`API ${regenRes.status}`))}
-      const regenData=await regenRes.json();const regenTxt=(regenData?.content?.[0]?.text||"").trim();
+      const regenData=await regenRes.json();const regenTxt=(anthropicText(regenData)||"").trim();
       const regenClean=regenTxt.replace(/^```(?:json)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
       const result=JSON.parse(regenClean);
       if(result.hook)setHook(result.hook);
