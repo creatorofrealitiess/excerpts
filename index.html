@@ -439,8 +439,8 @@ CENSORSHIP: censor explicit words — f*ck, sh*t, d*mn, c*ck, cl*t, p*ssy, d*ck,
 
 Output ONLY the JSON object. It must start with { and end with }.`;
 
-// === IndexedDB v3 with categories + books ===
-const DB_NAME="booktok_photos", DB_VER=3, STORE="photos", CAT_STORE="categories", BOOK_STORE="books";
+// === IndexedDB v4 with categories + books + session ===
+const DB_NAME="booktok_photos", DB_VER=4, STORE="photos", CAT_STORE="categories", BOOK_STORE="books", SESSION_STORE="session";
 function openDB(){return new Promise((s,j)=>{
   const r=indexedDB.open(DB_NAME,DB_VER);
   r.onupgradeneeded=()=>{
@@ -448,6 +448,7 @@ function openDB(){return new Promise((s,j)=>{
     if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE,{keyPath:"id"});
     if(!db.objectStoreNames.contains(CAT_STORE))db.createObjectStore(CAT_STORE,{keyPath:"id"});
     if(!db.objectStoreNames.contains(BOOK_STORE))db.createObjectStore(BOOK_STORE,{keyPath:"id"});
+    if(!db.objectStoreNames.contains(SESSION_STORE))db.createObjectStore(SESSION_STORE,{keyPath:"id"});
   };
   r.onsuccess=()=>s(r.result);r.onerror=()=>j(r.error);
 })}
@@ -459,6 +460,9 @@ async function dbGetCats(){const db=await openDB();return new Promise((s,j)=>{co
 async function dbPutBook(b){const db=await openDB();return new Promise((s,j)=>{const t=db.transaction(BOOK_STORE,"readwrite");t.objectStore(BOOK_STORE).put(b);t.oncomplete=s;t.onerror=()=>j(t.error)})}
 async function dbGetBooks(){const db=await openDB();return new Promise((s,j)=>{const t=db.transaction(BOOK_STORE,"readonly");const r=t.objectStore(BOOK_STORE).getAll();r.onsuccess=()=>s(r.result);r.onerror=()=>j(r.error)})}
 async function dbDelBook(id){const db=await openDB();return new Promise((s,j)=>{const t=db.transaction(BOOK_STORE,"readwrite");t.objectStore(BOOK_STORE).delete(id);t.oncomplete=s;t.onerror=()=>j(t.error)})}
+async function dbSaveSession(sess){const db=await openDB();return new Promise((s,j)=>{const t=db.transaction(SESSION_STORE,"readwrite");t.objectStore(SESSION_STORE).put({id:"current",...sess});t.oncomplete=s;t.onerror=()=>j(t.error)})}
+async function dbGetSession(){const db=await openDB();return new Promise((s,j)=>{const t=db.transaction(SESSION_STORE,"readonly");const r=t.objectStore(SESSION_STORE).get("current");r.onsuccess=()=>s(r.result||null);r.onerror=()=>j(r.error)})}
+async function dbClearSession(){const db=await openDB();return new Promise((s,j)=>{const t=db.transaction(SESSION_STORE,"readwrite");t.objectStore(SESSION_STORE).delete("current");t.oncomplete=s;t.onerror=()=>j(t.error)})}
 
 function fileToB64(f){return new Promise((s,j)=>{const r=new FileReader();r.onload=()=>s(r.result);r.onerror=j;r.readAsDataURL(f)})}
 function resizeImg(d,mW=200){return new Promise(s=>{const i=new Image();i.onload=()=>{const sc=Math.min(1,mW/i.width);const c=document.createElement("canvas");c.width=i.width*sc;c.height=i.height*sc;c.getContext("2d").drawImage(i,0,0,c.width,c.height);s(c.toDataURL("image/jpeg",0.7))};i.src=d})}
@@ -1057,7 +1061,7 @@ function BookTokApp(){
   const[scanning,setScanning]=useState(false);
   const[scanError,setScanError]=useState("");
   const[letClaudeChoose,setLetClaudeChoose]=useState(false);
-  const APP_VERSION="v14";
+  const APP_VERSION="v17";
   // Cache tracking — reflects the real Anthropic usage object from the last book-reading call
   const[cacheInfo,setCacheInfo]=useState(null); // {status:'hit'|'write'|'miss', at:timestamp}
   const[cacheNow,setCacheNow]=useState(Date.now());
@@ -1083,6 +1087,7 @@ function BookTokApp(){
   const[chatContextMode,setChatContextMode]=useState("full"); // "excerpt" or "full"
   const chatEndRef=useRef(null);
   const chatInputRef=useRef(null);
+  const[sessionRestoredBanner,setSessionRestoredBanner]=useState(false);
   // Hook Forge
   const[hookVariants,setHookVariants]=useState([]);
   const[hookForgeLoading,setHookForgeLoading]=useState(false);
@@ -1318,9 +1323,20 @@ const baseName=fileArr[0].name.replace(/\.\w+$/,'').replace(/[_\-\s]*(bold[_\-\s
     const vibeInstruction=chooseMode
       ? `Find the SINGLE strongest BookTok moment in this book — the scene most likely to stop a scroll and drive saves — regardless of which trope it fits. Then, in the JSON, add a "chosen_trope" key naming the trope it best represents (a short phrase).`
       : `Vibe/Trope to find: ${vibe}`;
-    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:ANTHROPIC_HEADERS,body:JSON.stringify({model:claudeModel,max_tokens:8192,output_config:{effort},system:buildCachedBookBlocks(bookText),messages:[{role:"user",content:`${SONNET_SCENE_PROMPT}\n\n${vibeInstruction}`}]})});
+    const EFFORT_FALLBACK={xhigh:"high",max:"high",high:"medium",medium:"low",low:"low"};
+    async function sceneCall(eff){
+      return await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:ANTHROPIC_HEADERS,body:JSON.stringify({model:claudeModel,max_tokens:16000,output_config:{effort:eff},system:buildCachedBookBlocks(bookText),messages:[{role:"user",content:`${SONNET_SCENE_PROMPT}\n\n${vibeInstruction}`}]})});
+    }
+    let res=await sceneCall(effort);
     if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error("Claude: "+(e?.error?.message||`API ${res.status}`))}
-    const data=await res.json();recordCacheUsage(data);
+    let data=await res.json();recordCacheUsage(data);
+    // If it ran out of room mid-think (only a thinking block, stop_reason max_tokens),
+    // retry once at lower effort so thinking is shorter and the excerpt fits.
+    if(!anthropicText(data)&&data?.stop_reason==="max_tokens"&&effort!=="low"){
+      setLoadingStatus("Claude thought a lot — retrying at lower effort...");
+      res=await sceneCall(EFFORT_FALLBACK[effort]||"low");
+      if(res.ok){const d2=await res.json();recordCacheUsage(d2);if(anthropicText(d2))data=d2;}
+    }
     // Find the text block — with extended thinking, content[0] may be a thinking block, not text.
     const text=anthropicText(data);
     if(!text){
@@ -1364,7 +1380,7 @@ Return ONLY a JSON object (no markdown, no preamble) mapping each EXACT trope st
 
 Trope list (use these EXACT strings as keys):
 ${VIBES.map(v=>`- ${v}`).join("\n")}`;
-    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:ANTHROPIC_HEADERS,body:JSON.stringify({model:claudeModel,max_tokens:6144,output_config:{effort},system:buildCachedBookBlocks(bookText),messages:[{role:"user",content:prompt}]})});
+    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:ANTHROPIC_HEADERS,body:JSON.stringify({model:claudeModel,max_tokens:12000,output_config:{effort},system:buildCachedBookBlocks(bookText),messages:[{role:"user",content:prompt}]})});
     if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error("Scan: "+(e?.error?.message||`API ${res.status}`))}
     const data=await res.json();recordCacheUsage(data);
     const text=anthropicText(data);
@@ -1423,7 +1439,7 @@ ${VIBES.map(v=>`- ${v}`).join("\n")}`;
         setHook(scene.hook);const _sc=splitReactionFromCaption(scene.caption);setReaction(_sc.reaction);setCaption(_sc.caption);setContext(scene.context);
         const bm=scene.caption.match(/\uD83D\uDCDA\s*:?\s*(.+?)(?:\n|$)/);if(bm)setAuthor(bm[1].trim());else if(selectedBook)setAuthor(`${selectedBook.title} by ${selectedBook.author}`);
         setLoadingStatus("Claude: Formatting tuples...");
-        const sonRes=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:8192,output_config:{effort},messages:[{role:"user",content:`${SONNET_TUPLE_PROMPT}\n\nHere is the excerpt to format:\n\n${scene.excerpt}`}]})});
+        const sonRes=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:16000,output_config:{effort},messages:[{role:"user",content:`${SONNET_TUPLE_PROMPT}\n\nHere is the excerpt to format:\n\n${scene.excerpt}`}]})});
         if(!sonRes.ok){const e=await sonRes.json().catch(()=>({}));throw new Error("Sonnet: "+(e?.error?.message||`API ${sonRes.status}`))}
         const sonData=await sonRes.json();const sonText=anthropicText(sonData);if(!sonText)throw new Error("Sonnet returned empty response");
         const cleanTuple=sonText.trim().replace(/^```(?:python)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
@@ -1499,7 +1515,7 @@ ${bookText.substring(0,200000)}`}]}],generationConfig:{temperature:0.3,maxOutput
   const doRender=useCallback(()=>{const entries=parseTupleData(tupleRaw);if(!entries.length){setError("No valid tuple data.");return}document.fonts.load(`500 ${fontSize}px "${fontName}"`).then(()=>{renderKindle(canvasRef.current,buildGroups(entries),2,fontName,fontSize);setRendered(true)})},[tupleRaw,fontName,fontSize]);
   const doCopy=useCallback(async()=>{try{const blob=await new Promise(r=>canvasRef.current.toBlob(r,'image/png'));await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);setCopied(true);setTimeout(()=>setCopied(false),2000)}catch(e){console.error(e)}},[]);
   const copyField=useCallback(async(text,field)=>{try{await navigator.clipboard.writeText(text);setCopiedField(field);setTimeout(()=>setCopiedField(""),1500)}catch(e){console.error(e)}},[]);
-  const resetAll=useCallback(()=>{setStep("upload");setActiveTab("generate");setWizardStep(1);setPdfFile(null);setPdfText("");setSelectedVibe("");setCustomVibe("");setHook("");setCaption("");setReaction("");setContext("");setTupleRaw("");setRendered(false);setAuthor("");setError("");setSelectedPhotos([]);setAiPickedPhotos([]);setSelectedBook(null);setChatMessages([]);setChatOpen(false);setHookVariants([]);setHookForgeOpen(false);setHookForgeError("");setDetectedTropes([]);setMysteryMode(false);setSwapText("");setSwapOpen(false);setSwapError("");setBookSummary("");setLetClaudeChoose(false);setCacheInfo(null);window._pinterestSearches=null},[]);
+  const resetAll=useCallback(()=>{setStep("upload");setActiveTab("generate");setWizardStep(1);setPdfFile(null);setPdfText("");setSelectedVibe("");setCustomVibe("");setHook("");setCaption("");setReaction("");setContext("");setTupleRaw("");setRendered(false);setAuthor("");setError("");setSelectedPhotos([]);setAiPickedPhotos([]);setSelectedBook(null);setChatMessages([]);setChatOpen(false);setHookVariants([]);setHookForgeOpen(false);setHookForgeError("");setDetectedTropes([]);setMysteryMode(false);setSwapText("");setSwapOpen(false);setSwapError("");setBookSummary("");setLetClaudeChoose(false);setCacheInfo(null);setSessionRestoredBanner(false);dbClearSession().catch(()=>{});window._pinterestSearches=null},[]);
 
   // Auto-scroll chat to bottom
   useEffect(()=>{if(chatEndRef.current)chatEndRef.current.scrollIntoView({behavior:"smooth"})},[chatMessages,chatLoading]);
@@ -1509,9 +1525,47 @@ ${bookText.substring(0,200000)}`}]}],generationConfig:{temperature:0.3,maxOutput
   // Keep effort valid for the selected model (e.g. switching to Sonnet clears xhigh)
   useEffect(()=>{const allowed=EFFORT_BY_MODEL[claudeModel]||["high"];if(!allowed.includes(effort))setEffort(allowed.includes("high")?"high":allowed[allowed.length-1])},[claudeModel]);
 
+  // === SESSION PERSISTENCE ===
+  // Restore the last working session on load so a refresh/deploy never loses the excerpt.
+  const sessionRestored=useRef(false);
+  useEffect(()=>{(async()=>{
+    if(sessionRestored.current)return;
+    sessionRestored.current=true;
+    try{
+      const s=await dbGetSession();
+      if(s&&s.tupleRaw){
+        if(s.pdfText)setPdfText(s.pdfText);
+        if(s.author)setAuthor(s.author);
+        if(s.selectedVibe)setSelectedVibe(s.selectedVibe);
+        if(s.customVibe)setCustomVibe(s.customVibe);
+        if(s.hook)setHook(s.hook);
+        if(s.caption)setCaption(s.caption);
+        if(s.reaction)setReaction(s.reaction);
+        if(s.context)setContext(s.context);
+        if(s.tupleRaw)setTupleRaw(s.tupleRaw);
+        if(s.selectedBook)setSelectedBook(s.selectedBook);
+        if(Array.isArray(s.chatMessages))setChatMessages(s.chatMessages);
+        setStep("results");
+        setActiveTab("excerpt");
+        setSessionRestoredBanner(true);
+      }
+    }catch(e){console.warn("Session restore failed:",e)}
+  })()},[]);
+
+  // Debounced save of the working session whenever the excerpt or its context changes.
+  useEffect(()=>{
+    if(!sessionRestored.current)return;      // don't save until after the restore pass
+    if(step!=="results"||!tupleRaw)return;   // only persist a real, generated excerpt
+    const t=setTimeout(()=>{
+      dbSaveSession({pdfText,author,selectedVibe,customVibe,hook,caption,reaction,context,tupleRaw,selectedBook,chatMessages,savedAt:Date.now()}).catch(e=>console.warn("Session save failed:",e));
+    },800);
+    return()=>clearTimeout(t);
+  },[step,tupleRaw,hook,caption,reaction,context,author,selectedVibe,customVibe,selectedBook,chatMessages,pdfText]);
+
+
   const sendChat=useCallback(async()=>{
     const msg=chatInput.trim();
-    if(!msg||!apiKey.trim())return;
+    if(!msg||!anthropicKey.trim())return;
     setChatInput("");
     const userMsg={role:"user",text:msg,ts:Date.now()};
     setChatMessages(prev=>[...prev,userMsg]);
@@ -1530,30 +1584,35 @@ ${bookText.substring(0,200000)}`}]}],generationConfig:{temperature:0.3,maxOutput
       bookContext=`Here is the context for the book I'm reading.\n\nBook: ${author||"Unknown"}\nVibe I'm exploring: ${selectedVibe||customVibe||"N/A"}\n\nCurrent excerpt:\n${excerptText}\n\nHook: ${hook}\nCaption: ${caption}\nContext: ${context}`;
     }
 
-    // Build conversation history for multi-turn using proper Gemini format
-    // Put book context as the first user message, with a model acknowledgment
-    const contents=[];
-    contents.push({role:"user",parts:[{text:bookContext}]});
-    contents.push({role:"model",parts:[{text:"I've read the book text you provided. I'm ready to answer your questions about it. What would you like to know?"}]});
+    // Build Anthropic-format conversation.
+    // Book context goes as the first user turn with an assistant ack, then prior history, then the new question.
+    const messages=[];
+    messages.push({role:"user",content:bookContext});
+    messages.push({role:"assistant",content:"I've read the book text you provided. I'm ready to answer your questions about it. What would you like to know?"});
     for(const m of chatMessages){
-      contents.push({role:m.role==="user"?"user":"model",parts:[{text:m.text}]});
+      messages.push({role:m.role==="user"?"user":"assistant",content:m.text});
     }
-    contents.push({role:"user",parts:[{text:msg}]});
+    messages.push({role:"user",content:msg});
+
+    // Cache the big full-book first user turn so repeat questions on the same book are cheap.
+    if(chatContextMode==="full"&&pdfText){
+      messages[0]={role:"user",content:[{type:"text",text:bookContext,cache_control:{type:"ephemeral"}}]};
+    }
 
     try{
-      const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`,{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({systemInstruction:{parts:[{text:systemCtx}]},contents,generationConfig:{temperature:0.7,maxOutputTokens:4096}})
+      const res=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",headers:ANTHROPIC_HEADERS,
+        body:JSON.stringify({model:claudeModel,max_tokens:4096,system:systemCtx,messages})
       });
       if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e?.error?.message||`API ${res.status}`)}
       const data=await res.json();
-      const reply=data?.candidates?.[0]?.content?.parts?.[0]?.text||"No response.";
+      const reply=anthropicText(data)||"No response.";
       setChatMessages(prev=>[...prev,{role:"assistant",text:reply,ts:Date.now()}]);
     }catch(e){
       setChatMessages(prev=>[...prev,{role:"assistant",text:"Error: "+e.message,ts:Date.now(),isError:true}]);
     }
     setChatLoading(false);
-  },[chatInput,apiKey,model,chatMessages,chatContextMode,pdfText,tupleRaw,author,selectedVibe,customVibe,hook,caption,context]);
+  },[chatInput,anthropicKey,claudeModel,chatMessages,chatContextMode,pdfText,tupleRaw,author,selectedVibe,customVibe,hook,caption,context,ANTHROPIC_HEADERS,anthropicText]);
 
   // === HOOK FORGE: Generate 5 hook variants using Anthropic ===
   const generateHookVariants=useCallback(async()=>{
@@ -1707,7 +1766,7 @@ No markdown, no backticks.
     setSwapLoading(true);setSwapError("");
     try{
       // Step 1: Format tuples
-      const sonRes=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:8192,output_config:{effort},messages:[{role:"user",content:`${SONNET_TUPLE_PROMPT}\n\nHere is the excerpt to format:\n\n${swapText.trim()}`}]})});
+      const sonRes=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":anthropicKey.trim(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:claudeModel,max_tokens:16000,output_config:{effort},messages:[{role:"user",content:`${SONNET_TUPLE_PROMPT}\n\nHere is the excerpt to format:\n\n${swapText.trim()}`}]})});
       if(!sonRes.ok){const e=await sonRes.json().catch(()=>({}));throw new Error("Tuple formatting: "+(e?.error?.message||`API ${sonRes.status}`))}
       const sonData=await sonRes.json();const sonText=anthropicText(sonData);if(!sonText)throw new Error("Tuple formatting returned empty");
       const cleanTuple=sonText.trim().replace(/^```(?:python)?\s*/i,'').replace(/\s*```\s*$/,'').trim();
@@ -1795,6 +1854,14 @@ No markdown, no backticks.
         {step==="results"&&<button style={tabStyle("excerpt")} onClick={()=>setActiveTab("excerpt")}>Excerpt</button>}
         {step==="results"&&<button style={tabStyle("post")} onClick={()=>setActiveTab("post")}>Post</button>}
       </div>
+
+      {/* Restored-session banner */}
+      {sessionRestoredBanner&&step==="results"&&(
+        <div style={{margin:"0 auto 16px",maxWidth:"640px",padding:"10px 16px",backgroundColor:"#f0f7f0",border:"1px solid #cfe6cf",borderRadius:"10px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
+          <span style={{fontSize:"12px",color:"#3f6b3f",fontFamily:UI_FONT}}>↩︎ Restored your last excerpt — right where you left off before the refresh.</span>
+          <button onClick={()=>setSessionRestoredBanner(false)} style={{...ST.btn,padding:"3px 10px",fontSize:"10px",backgroundColor:"transparent",color:"#3f6b3f",border:"1px solid #cfe6cf",borderRadius:"12px",whiteSpace:"nowrap"}}>Dismiss</button>
+        </div>
+      )}
 
       {/* GENERATE TAB — Stepped Wizard */}
       {activeTab==="generate"&&(
@@ -2230,7 +2297,7 @@ No markdown, no backticks.
           <div onClick={()=>{setChatOpen(!chatOpen);if(!chatOpen)setTimeout(()=>chatInputRef.current?.focus(),100)}} style={{padding:"10px 24px",backgroundColor:"#fff",borderTop:"1px solid #e8e6e1",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",userSelect:"none"}}>
             <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
               <span style={{fontSize:"14px"}}>💬</span>
-              <span style={{fontSize:"12px",fontWeight:600,color:"#6b6660",fontFamily:UI_FONT}}>Ask Gemini about this scene</span>
+              <span style={{fontSize:"12px",fontWeight:600,color:"#6b6660",fontFamily:UI_FONT}}>Ask Claude about this scene</span>
               {chatMessages.length>0&&<span style={{fontSize:"9px",backgroundColor:"#f0eeea",padding:"1px 6px",borderRadius:"8px",color:"#a09a93",fontFamily:"'DM Sans', sans-serif"}}>{chatMessages.length}</span>}
             </div>
             <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
@@ -2249,7 +2316,7 @@ No markdown, no backticks.
                 <span style={{fontSize:"10px",color:"#a09a93",fontFamily:"'DM Sans', sans-serif",textTransform:"uppercase",letterSpacing:"1px"}}>Context:</span>
                 <button onClick={()=>setChatContextMode("excerpt")} style={{padding:"4px 12px",fontSize:"11px",borderRadius:"12px",border:"1px solid",cursor:"pointer",fontFamily:UI_FONT,borderColor:chatContextMode==="excerpt"?"#e85d3a":"#e8e6e1",backgroundColor:chatContextMode==="excerpt"?"#f0eeea":"transparent",color:chatContextMode==="excerpt"?"#1a1815":"#a09a93",transition:"all 0.15s"}}>Excerpt Only</button>
                 <button onClick={()=>setChatContextMode("full")} style={{padding:"4px 12px",fontSize:"11px",borderRadius:"12px",border:"1px solid",cursor:"pointer",fontFamily:UI_FONT,borderColor:chatContextMode==="full"?"#e85d3a":"#e8e6e1",backgroundColor:chatContextMode==="full"?"#f0eeea":"transparent",color:chatContextMode==="full"?"#1a1815":"#a09a93",transition:"all 0.15s"}}>Full Book</button>
-                <span style={{fontSize:"10px",color:"#c4bfb8",fontFamily:"'DM Sans', sans-serif",marginLeft:"4px"}}>{chatContextMode==="full"?"Gemini can see the entire book":"Gemini sees hook + caption + context + excerpt"}</span>
+                <span style={{fontSize:"10px",color:"#c4bfb8",fontFamily:"'DM Sans', sans-serif",marginLeft:"4px"}}>{chatContextMode==="full"?"Claude can see the entire book":"Claude sees hook + caption + context + excerpt"}</span>
               </div>
 
               {/* Messages */}
@@ -2289,8 +2356,8 @@ No markdown, no backticks.
 
               {/* Input */}
               <div style={{padding:"10px 24px 14px",borderTop:"1px solid #f0eeea",display:"flex",gap:"8px",flexShrink:0}}>
-                <input ref={chatInputRef} value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendChat()}}} placeholder={apiKey?"Ask about this scene...":"Enter your API key on the Generate tab first"} disabled={!apiKey.trim()} style={{...ST.input,flex:1,fontSize:"13px",padding:"10px 14px",backgroundColor:"#fff",borderColor:"#e8e6e1"}} />
-                <button onClick={sendChat} disabled={chatLoading||!chatInput.trim()||!apiKey.trim()} style={{...ST.btn,padding:"10px 20px",backgroundColor:chatLoading||!chatInput.trim()||!apiKey.trim()?"#f0eeea":"#e85d3a",color:chatLoading||!chatInput.trim()||!apiKey.trim()?"#a09a93":"#fff",fontSize:"13px",whiteSpace:"nowrap"}}>Send</button>
+                <input ref={chatInputRef} value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendChat()}}} placeholder={anthropicKey?"Ask about this scene...":"Enter your Anthropic API key on the Generate tab first"} disabled={!anthropicKey.trim()} style={{...ST.input,flex:1,fontSize:"13px",padding:"10px 14px",backgroundColor:"#fff",borderColor:"#e8e6e1"}} />
+                <button onClick={sendChat} disabled={chatLoading||!chatInput.trim()||!anthropicKey.trim()} style={{...ST.btn,padding:"10px 20px",backgroundColor:chatLoading||!chatInput.trim()||!anthropicKey.trim()?"#f0eeea":"#e85d3a",color:chatLoading||!chatInput.trim()||!anthropicKey.trim()?"#a09a93":"#fff",fontSize:"13px",whiteSpace:"nowrap"}}>Send</button>
               </div>
             </div>
           )}
