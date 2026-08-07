@@ -1061,7 +1061,11 @@ function BookTokApp(){
   const[scanning,setScanning]=useState(false);
   const[scanError,setScanError]=useState("");
   const[letClaudeChoose,setLetClaudeChoose]=useState(false);
-  const APP_VERSION="v17";
+  const APP_VERSION="v18";
+  // How much book text gets sent to Claude. Used by BOTH scene generation and chat —
+  // they must match, or chat can't see scenes the generator found deeper in the book.
+  // Sonnet 5 has a 1M-token context; ~900k chars is roughly 250k tokens, well within it.
+  const BOOK_CHAR_LIMIT=900000;
   // Cache tracking — reflects the real Anthropic usage object from the last book-reading call
   const[cacheInfo,setCacheInfo]=useState(null); // {status:'hit'|'write'|'miss', at:timestamp}
   const[cacheNow,setCacheNow]=useState(Date.now());
@@ -1292,7 +1296,7 @@ const baseName=fileArr[0].name.replace(/\.\w+$/,'').replace(/[_\-\s]*(bold[_\-\s
   // generation for this book), marked 1h. Task-specific instructions go AFTER, uncached.
   // Book-first means the scan and all generations share ONE warm cache for the whole author session.
   const buildCachedBookBlocks=useCallback((bookText)=>{
-    const truncated=bookText.length>600000?bookText.substring(0,600000):bookText;
+    const truncated=bookText.length>BOOK_CHAR_LIMIT?bookText.substring(0,BOOK_CHAR_LIMIT):bookText;
     return [
       {type:"text",text:`=== FULL BOOK TEXT ===\n${truncated}`,cache_control:{type:"ephemeral",ttl:"1h"}}
     ];
@@ -1576,7 +1580,7 @@ ${bookText.substring(0,200000)}`}]}],generationConfig:{temperature:0.3,maxOutput
     let systemCtx;
     let bookContext="";
     if(chatContextMode==="full"&&pdfText){
-      const truncBook=pdfText.length>200000?pdfText.substring(0,200000):pdfText;
+      const truncBook=pdfText.length>BOOK_CHAR_LIMIT?pdfText.substring(0,BOOK_CHAR_LIMIT):pdfText;
       systemCtx=`You are a knowledgeable book assistant. You have been given the FULL TEXT of this book. Answer the user's questions using the book text provided in the conversation. Focus on plot, characters, scenes, dialogue, motivations, and context. Do NOT give content creation tips, filming advice, or social media suggestions unless explicitly asked.\n\nIMPORTANT: The full book text is in the first message of this conversation. If the user asks about what happens next, what follows a scene, or what a character says — search through the full book text to find it. Do NOT say you don't have the text or that it cuts off.`;
       bookContext=`Here is the full book text for reference. Use this to answer my questions.\n\nBook: ${author||"Unknown"}\nVibe I'm exploring: ${selectedVibe||customVibe||"N/A"}\n\nI'm currently looking at this excerpt:\n${excerptText}\n\nHook: ${hook}\nContext: ${context}\n\n=== FULL BOOK TEXT ===\n${truncBook}`;
     } else {
@@ -1596,7 +1600,7 @@ ${bookText.substring(0,200000)}`}]}],generationConfig:{temperature:0.3,maxOutput
 
     // Cache the big full-book first user turn so repeat questions on the same book are cheap.
     if(chatContextMode==="full"&&pdfText){
-      messages[0]={role:"user",content:[{type:"text",text:bookContext,cache_control:{type:"ephemeral"}}]};
+      messages[0]={role:"user",content:[{type:"text",text:bookContext,cache_control:{type:"ephemeral",ttl:"1h"}}]};
     }
 
     try{
