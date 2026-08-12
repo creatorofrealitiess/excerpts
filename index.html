@@ -25,20 +25,31 @@
   <script type="text/babel">
     const { useState, useRef, useCallback, useEffect, useMemo } = React;
 
-const COLOR_MAP = {
-  male: "#B5CDFD", female: "#FEC2D3", internal: "#FFF8B3", other: "#FDD9B0", narrative: null,
-  male_flow: "#B5CDFD", female_flow: "#FEC2D3", internal_flow: "#FFF8B3", other_flow: "#FDD9B0", narrative_flow: null,
-  male_underline: "#B5CDFD", female_underline: "#FEC2D3", internal_underline: "#FFF8B3", other_underline: "#FDD9B0", narrative_underline: null,
-  male_italic: "#B5CDFD", female_italic: "#FEC2D3", internal_italic: "#FFF8B3", other_italic: "#FDD9B0", narrative_italic: null,
-  male_italic_flow: "#B5CDFD", female_italic_flow: "#FEC2D3", internal_italic_flow: "#FFF8B3", other_italic_flow: "#FDD9B0", narrative_italic_flow: null,
-  male_bold: "#B5CDFD", female_bold: "#FEC2D3", internal_bold: "#FFF8B3", other_bold: "#FDD9B0", narrative_bold: null,
-  male_bold_flow: "#B5CDFD", female_bold_flow: "#FEC2D3", internal_bold_flow: "#FFF8B3", other_bold_flow: "#FDD9B0", narrative_bold_flow: null,
-  male_bold_underline: "#B5CDFD", female_bold_underline: "#FEC2D3", internal_bold_underline: "#FFF8B3", other_bold_underline: "#FDD9B0", narrative_bold_underline: null,
-  male_bold_italic: "#B5CDFD", female_bold_italic: "#FEC2D3", internal_bold_italic: "#FFF8B3", other_bold_italic: "#FDD9B0", narrative_bold_italic: null,
-  male_bold_italic_flow: "#B5CDFD", female_bold_italic_flow: "#FEC2D3", internal_bold_italic_flow: "#FFF8B3", other_bold_italic_flow: "#FDD9B0", narrative_bold_italic_flow: null,
-  male_bold_italic_underline: "#B5CDFD", female_bold_italic_underline: "#FEC2D3", internal_bold_italic_underline: "#FFF8B3", other_bold_italic_underline: "#FDD9B0", narrative_bold_italic_underline: null,
-  male_italic_underline: "#B5CDFD", female_italic_underline: "#FEC2D3", internal_italic_underline: "#FFF8B3", other_italic_underline: "#FDD9B0", narrative_italic_underline: null,
+// Themes are keyed by BASE ROLE (male/female/internal/other/narrative). Tag modifiers
+// (_flow, _bold, _italic, _underline) are stripped before lookup, so every combination
+// resolves without needing to be enumerated.
+const THEMES = {
+  light: {
+    id: "light", label: "Light",
+    bg: "#FFFFFF", text: "#1a1a1a", censor: "#000000",
+    underline: "#1a1a1a", underlineW: 1.5,
+    hl: { male: "#B5CDFD", female: "#FEC2D3", internal: "#FFF8B3", other: "#FDD9B0", narrative: null },
+  },
+  dark: {
+    id: "dark", label: "Dark",
+    bg: "#000000", text: "#FAFAF8", censor: "#FAFAF8",
+    underline: "#9A2A18", underlineW: 2.2,
+    hl: { male: "#415580", female: "#7B3C5C", internal: "#713E7D", other: "#3E7D7B", narrative: null },
+  },
 };
+const ASPECTS = [
+  { id: "auto", label: "Auto — fit to text", r: null },
+  { id: "1:1",  label: "1:1 — square",       r: 1 },
+  { id: "4:5",  label: "4:5 — portrait",     r: 4 / 5 },
+  { id: "5:6",  label: "5:6 — portrait",     r: 5 / 6 },
+  { id: "6:5",  label: "6:5 — landscape",    r: 6 / 5 },
+  { id: "9:16", label: "9:16 — full screen", r: 9 / 16 },
+];
 const VIBES = ["Bantering & Sexual Tension","Angst","Possessive / Jealousy","Forced Proximity","Enemies to Lovers Turning Point","Soft Vulnerability","Dark & Obsessive","Touch Her and Die","He Falls First","Grumpy / Sunshine","Slow Burn Payoff","Forbidden"];
 const GEMINI_MODELS = [{id:"gemini-3.1-pro-preview",label:"Gemini 3.1 Pro"},{id:"gemini-3.5-flash",label:"Gemini 3.5 Flash"}];
 const FONT_OPTIONS = ["Lora","Literata","Gupter","Crimson Text","Source Serif 4","Merriweather","EB Garamond","DejaVu Serif"];
@@ -137,7 +148,9 @@ CRITICAL TUPLE FORMATTING RULES:
 - Modifier suffixes (combine with base): _flow, _underline, _bold, _italic
 - Combined examples: male_flow, female_bold, narrative_italic, male_bold_italic, female_italic_underline, male_bold_flow, female_italic_flow, male_bold_italic_flow, female_bold_italic_underline
 - Use _bold for bold text, _italic for italic text, combine freely: male_bold, female_italic, narrative_bold_italic
-- _underline = emotional peak dialogue or internal thought only. NEVER use narrative_underline. Max ONE underline tag total.
+- _underline = the single emotional peak of the excerpt. Valid on ANY base tag — dialogue, internal thought, OR narrative. narrative_underline is allowed and encouraged where the peak lands in narration.
+- Mark ONE peak moment, but that moment may span consecutive tuples. If the peak runs from dialogue into the narrative beat that lands it, tag EVERY tuple in that stretch with _underline so the line draws unbroken across them. A peak that is purely narrative or purely internal is fine on its own.
+- To carry the underline from dialogue into its speech tag / narrative beat on the SAME visual line, combine _flow and _underline: ("""I know,""", "female_flow_underline"), (" she said, and meant it.", "narrative_underline")
 - Censor ALL explicit words with asterisks: f*ck, sh*t, d*mn, c*ck, cl*t, p*ssy, d*ck, c*m, c*nt, m*ans, po*nd, etc.
 - 1-2 internal tags max
 - Leading space rule: ONLY the speech-tag continuation in a _flow pair starts with a space (e.g. " she said."). New paragraphs NEVER start with a space.
@@ -306,7 +319,7 @@ CHARACTER TAGS:
 
 MODIFIER SUFFIXES (combine with base tag):
 - _flow = dialogue continues on same visual line as the speech tag after it
-- _underline = emotional peak (use on exactly ONE line, the most intense moment)
+- _underline = emotional peak, the single most intense moment. Valid on any base tag including narrative. Tag consecutive tuples to carry the underline across dialogue and narration together; a purely narrative or internal peak is fine on its own.
 - _bold = bold text
 - _italic = italic text
 - Combine freely: male_flow, female_bold, male_italic_flow, female_bold_italic_underline
@@ -414,7 +427,7 @@ CHARACTER TAGS:
 
 MODIFIER SUFFIXES (combine freely):
 - _flow = dialogue continues onto the speech tag in the NEXT tuple, on the same visual line
-- _underline = emotional peak — use on EXACTLY ONE tuple, the single most intense line
+- _underline = emotional peak — ONE moment, the single most intense stretch. Valid on any base tag including narrative. Span it across consecutive tuples (dialogue + the narration that lands it) by tagging each one; a purely narrative or internal peak is fine on its own.
 - _bold, _italic = styling
 - e.g. male_flow, female_bold, male_italic_flow, female_bold_italic_underline
 
@@ -547,12 +560,16 @@ function parseTupleData(raw) {
   return entries;
 }
 
-function isFlowTag(tag) { return tag.endsWith("_flow") || tag.endsWith("_italic_flow") || tag.endsWith("_bold_italic_flow") || tag.endsWith("_bold_flow"); }
+// _flow is matched anywhere in the tag, not just at the end, so it can be combined with
+// _underline in either order (male_flow_underline / male_underline_flow) — needed for a
+// peak that runs from dialogue into the narrative beat on the same visual line.
+function isFlowTag(tag) { return String(tag || "").includes("_flow"); }
 function isUnderlineTag(tag) { return tag.includes("_underline"); }
 function isItalicTag(tag) { return tag.includes("_italic"); }
 function isBoldTag(tag) { return tag.includes("_bold"); }
 function isBoldItalicTag(tag) { return tag.includes("_bold_italic"); }
-function getHL(tag) { return COLOR_MAP[tag] || null; }
+function baseRole(tag) { return String(tag || "").replace(/_flow|_underline|_bold|_italic/g, "") || "narrative"; }
+function getHL(tag, theme) { return (theme || THEMES.light).hl[baseRole(tag)] || null; }
 function hasCensor(w) { return w.includes("*"); }
 
 function buildGroups(entries) {
@@ -600,9 +617,16 @@ function buildGroups(entries) {
   return g;
 }
 
-function renderKindle(canvas, groups, scale, fontName, fontSize) {
+function renderKindle(canvas, groups, scale, fontName, fontSize, opts) {
+  const O = opts || {};
+  const TH = THEMES[O.theme] || THEMES.light;
+  const ROUND = O.rounded !== false;
+  const AR = O.aspect || null;
   const S = scale;
-  const ctx = canvas.getContext('2d');
+  // All layout and drawing happens on an offscreen buffer sized to the text block.
+  // The visible canvas is composed from it at the end, optionally padded to an aspect ratio.
+  const work = document.createElement('canvas');
+  const ctx = work.getContext('2d');
   const baseW = Math.round(540 * (fontSize / 20));
   const CW = baseW * S;
   const MX = Math.round(20 * (fontSize / 20)) * S;
@@ -679,11 +703,9 @@ function renderKindle(canvas, groups, scale, fontName, fontSize) {
   let nLines = 0;
   for (const gl of allLines) nLines += gl.length;
   const totalH = TM + nLines * LH + (allLines.length - 1) * PG + BM;
-  canvas.width = CW;
-  canvas.height = totalH;
-  canvas.style.width = baseW + 'px';
-  canvas.style.height = (totalH / S) + 'px';
-  ctx.fillStyle = '#FFFFFF';
+  work.width = CW;
+  work.height = totalH;
+  ctx.fillStyle = TH.bg;
   ctx.fillRect(0, 0, CW, totalH);
   ctx.font = fontStr;
   ctx.textBaseline = 'alphabetic';
@@ -728,26 +750,38 @@ function renderKindle(canvas, groups, scale, fontName, fontSize) {
     const { y: ly, wps } = ld;
     let hi = 0;
     while (hi < wps.length) {
-      const col = getHL(wps[hi].tok.tag);
+      const col = getHL(wps[hi].tok.tag, TH);
       if (!col) { hi++; continue; }
       let he = hi;
-      while (he + 1 < wps.length && getHL(wps[he + 1].tok.tag) === col) he++;
+      while (he + 1 < wps.length && getHL(wps[he + 1].tok.tag, TH) === col) he++;
       const isFirstWord = hi === 0;
       const isLastWord = he === wps.length - 1;
       const prevLine = li > 0 ? lineData[li - 1] : null;
       const sameGroupAsPrev = prevLine && prevLine.groupIdx === ld.groupIdx;
-      const prevLastCol = (sameGroupAsPrev && prevLine.wps.length > 0) ? getHL(prevLine.wps[prevLine.wps.length - 1].tok.tag) : null;
+      const prevLastCol = (sameGroupAsPrev && prevLine.wps.length > 0) ? getHL(prevLine.wps[prevLine.wps.length - 1].tok.tag, TH) : null;
       const continuesFromPrev = isFirstWord && prevLastCol === col;
       const nextLine = li < lineData.length - 1 ? lineData[li + 1] : null;
       const sameGroupAsNext = nextLine && nextLine.groupIdx === ld.groupIdx;
-      const nextFirstCol = (sameGroupAsNext && nextLine.wps.length > 0) ? getHL(nextLine.wps[0].tok.tag) : null;
+      const nextFirstCol = (sameGroupAsNext && nextLine.wps.length > 0) ? getHL(nextLine.wps[0].tok.tag, TH) : null;
       const continuesToNext = isLastWord && nextFirstCol === col;
       const rx = continuesFromPrev ? MX : wps[hi].x;
       const rEndX = continuesToNext ? (CW - MX) : (wps[he].x + wps[he].w);
       const rt = ly - HLP_T;
       const rb = continuesToNext ? (ly + LH - HLP_T) : (ly + asc + HLP_B);
+      const rw = rEndX - rx, rh = rb - rt;
       ctx.fillStyle = col;
-      ctx.fillRect(rx, rt, rEndX - rx, rb - rt);
+      if (ROUND && typeof ctx.roundRect === 'function' && rw > 0 && rh > 0) {
+        // Corners on the side where the highlight carries onto another line stay square,
+        // so a wrapped highlight reads as one band instead of two separate pills.
+        const rad = Math.max(0, Math.min(Math.round(rh * 0.12), Math.floor(rw / 2)));
+        const L = continuesFromPrev ? 0 : rad;
+        const R = continuesToNext ? 0 : rad;
+        ctx.beginPath();
+        ctx.roundRect(rx, rt, rw, rh, [L, R, R, L]);
+        ctx.fill();
+      } else {
+        ctx.fillRect(rx, rt, rw, rh);
+      }
       hi = he + 1;
     }
   }
@@ -756,7 +790,7 @@ function renderKindle(canvas, groups, scale, fontName, fontSize) {
   for (let li = 0; li < lineData.length; li++) {
     const { y: ly, wps } = lineData[li];
     const ty = ly + asc;
-    ctx.fillStyle = '#1a1a1a';
+    ctx.fillStyle = TH.text;
     ctx.font = fontStr;
     for (const wp of wps) {
       const bold = isBoldTag(wp.tok.tag), italic = isItalicTag(wp.tok.tag);
@@ -764,7 +798,7 @@ function renderKindle(canvas, groups, scale, fontName, fontSize) {
       ctx.fillText(wp.tok.text, wp.x, ty);
       if (hasCensor(wp.tok.text)) {
         ctx.beginPath();
-        ctx.strokeStyle = '#000';
+        ctx.strokeStyle = TH.censor;
         ctx.lineWidth = 2.5 * S;
         const sy = ty - asc * 0.35;
         ctx.moveTo(wp.x, sy); ctx.lineTo(wp.x + wp.w, sy);
@@ -777,14 +811,36 @@ function renderKindle(canvas, groups, scale, fontName, fontSize) {
       let ue = ui;
       while (ue + 1 < wps.length && isUnderlineTag(wps[ue + 1].tok.tag)) ue++;
       ctx.beginPath();
-      ctx.strokeStyle = '#1a1a1a';
-      ctx.lineWidth = 1.5 * S;
+      ctx.strokeStyle = TH.underline;
+      ctx.lineWidth = TH.underlineW * S;
       ctx.moveTo(wps[ui].x, ty + 3 * S);
       ctx.lineTo(wps[ue].x + wps[ue].w, ty + 3 * S);
       ctx.stroke();
       ui = ue + 1;
     }
   }
+
+  // FINAL PASS: compose onto the visible canvas.
+  // With no aspect target this is a 1:1 copy. With one, the canvas grows around the
+  // text block — whichever dimension is short gets padded — and the block is centered.
+  let outW = CW, outH = totalH, ox = 0, oy = 0;
+  if (AR) {
+    const minPad = Math.round(24 * (fontSize / 20)) * S;
+    const padW = CW + minPad * 2, padH = totalH + minPad * 2;
+    if (padW / padH < AR) { outH = padH; outW = Math.round(padH * AR); }
+    else { outW = padW; outH = Math.round(padW / AR); }
+    ox = Math.round((outW - CW) / 2);
+    oy = Math.round((outH - totalH) / 2);
+  }
+  const octx = canvas.getContext('2d');
+  canvas.width = outW;
+  canvas.height = outH;
+  canvas.style.width = (outW / S) + 'px';
+  canvas.style.height = 'auto';
+  canvas.style.maxWidth = '100%';
+  octx.fillStyle = TH.bg;
+  octx.fillRect(0, 0, outW, outH);
+  octx.drawImage(work, ox, oy);
 }
 
 function parseGeminiResponse(text){const r={hook:"",caption:"",context:"",tupleRaw:""};const hk=text.match(/\*?\*?Hook:?\*?\*?\s*([\s\S]*?)(?=\*?\*?Caption:?\*?\*?)/i);const cp=text.match(/\*?\*?Caption:?\*?\*?\s*([\s\S]*?)(?=\*?\*?Context:?\*?\*?)/i);const cx=text.match(/\*?\*?Context:?\*?\*?\s*([\s\S]*?)(?=\*?\*?Transfer Data:?\*?\*?)/i);const td=text.match(/\*?\*?Transfer Data:?\*?\*?\s*([\s\S]*?)$/i);if(hk)r.hook=hk[1].trim();if(cp)r.caption=cp[1].trim();if(cx)r.context=cx[1].trim();if(td){let raw=td[1].trim().replace(/^```(?:python)?\s*/i,'').replace(/\s*```\s*$/,'');r.tupleRaw=raw.trim()}return r}
@@ -920,12 +976,15 @@ function autoFixFlowTags(rawTuple) {
           const nextIsNarr = nextPart && !nextPart.isDialogue;
           const dialogueEndsWithComma = /,\s*""$/.test(part.text);
           if (nextIsNarr && dialogueEndsWithComma) {
-            partTag = baseTag === 'narrative' ? 'female_flow' : baseTag + '_flow';
+            partTag = (baseTag === 'narrative' ? 'female' : baseTag) + '_flow';
           } else {
             partTag = baseTag === 'narrative' ? 'female' : baseTag;
           }
+          if (tag.includes('_underline')) partTag += '_underline';
         } else {
-          partTag = 'narrative';
+          // Keep the underline on the narration half so a peak that spans dialogue
+          // and the narrative beat after it still draws as one unbroken line.
+          partTag = tag.includes('_underline') ? 'narrative_underline' : 'narrative';
         }
         const text = part.text;
         result.push(`  ("${text}", "${partTag}"),`);
@@ -970,7 +1029,7 @@ function autoFixFlowTags(rawTuple) {
     const shouldFlow = endsBeforeClose && next &&
       !next.hasDialogue &&
       next.textStartsWithSpace &&
-      (next.tag === 'narrative' || next.tag === 'internal' || next.tag === 'other');
+      ['narrative', 'internal', 'other'].indexOf(baseRole(next.tag)) !== -1;
 
     if (shouldFlow && !cur.tag.endsWith('_flow')) {
       cur.line = cur.line.replace('"' + cur.tag + '"', '"' + baseTag + '_flow"');
@@ -1037,6 +1096,12 @@ function BookTokApp(){
   const canvasRef=useRef(null);
   const[fontName,setFontName]=useState("Lora");
   const[fontSize,setFontSize]=useState(20);
+  const[excTheme,setExcTheme]=useState(()=>{try{return localStorage.getItem("pm_exc_theme")==="dark"?"dark":"light"}catch(e){return "light"}});
+  const[excAspect,setExcAspect]=useState(()=>{try{const v=localStorage.getItem("pm_exc_aspect");return ASPECTS.some(a=>a.id===v)?v:"auto"}catch(e){return "auto"}});
+  const[excRounded,setExcRounded]=useState(()=>{try{return localStorage.getItem("pm_exc_rounded")!=="0"}catch(e){return true}});
+  const excAspectRatio=useMemo(()=>{const a=ASPECTS.find(x=>x.id===excAspect);return a?a.r:null},[excAspect]);
+  const excRenderOpts=useMemo(()=>({theme:excTheme,aspect:excAspectRatio,rounded:excRounded}),[excTheme,excAspectRatio,excRounded]);
+  useEffect(()=>{try{localStorage.setItem("pm_exc_theme",excTheme);localStorage.setItem("pm_exc_aspect",excAspect);localStorage.setItem("pm_exc_rounded",excRounded?"1":"0")}catch(e){}},[excTheme,excAspect,excRounded]);
   const[customFontName,setCustomFontName]=useState("");
   const fontFileRef=useRef(null);
   const pdfInputRef=useRef(null);
@@ -1061,7 +1126,7 @@ function BookTokApp(){
   const[scanning,setScanning]=useState(false);
   const[scanError,setScanError]=useState("");
   const[letClaudeChoose,setLetClaudeChoose]=useState(false);
-  const APP_VERSION="v18";
+  const APP_VERSION="v19";
   // How much book text gets sent to Claude. Used by BOTH scene generation and chat —
   // they must match, or chat can't see scenes the generator found deeper in the book.
   // Sonnet 5 has a 1M-token context; ~900k chars is roughly 250k tokens, well within it.
@@ -1515,8 +1580,8 @@ ${bookText.substring(0,200000)}`}]}],generationConfig:{temperature:0.3,maxOutput
     }catch(e){console.error("Book summary generation failed:",e)}
   },[apiKey,model]);
 
-  const autoRender=useCallback((raw)=>{const entries=parseTupleData(raw||tupleRaw);if(!entries.length)return;document.fonts.load(`500 ${fontSize}px "${fontName}"`).then(()=>{if(canvasRef.current){renderKindle(canvasRef.current,buildGroups(entries),2,fontName,fontSize);setRendered(true)}})},[tupleRaw,fontName,fontSize]);
-  const doRender=useCallback(()=>{const entries=parseTupleData(tupleRaw);if(!entries.length){setError("No valid tuple data.");return}document.fonts.load(`500 ${fontSize}px "${fontName}"`).then(()=>{renderKindle(canvasRef.current,buildGroups(entries),2,fontName,fontSize);setRendered(true)})},[tupleRaw,fontName,fontSize]);
+  const autoRender=useCallback((raw)=>{const entries=parseTupleData(raw||tupleRaw);if(!entries.length)return;document.fonts.load(`500 ${fontSize}px "${fontName}"`).then(()=>{if(canvasRef.current){renderKindle(canvasRef.current,buildGroups(entries),2,fontName,fontSize,excRenderOpts);setRendered(true)}})},[tupleRaw,fontName,fontSize,excRenderOpts]);
+  const doRender=useCallback(()=>{const entries=parseTupleData(tupleRaw);if(!entries.length){setError("No valid tuple data.");return}document.fonts.load(`500 ${fontSize}px "${fontName}"`).then(()=>{renderKindle(canvasRef.current,buildGroups(entries),2,fontName,fontSize,excRenderOpts);setRendered(true)})},[tupleRaw,fontName,fontSize,excRenderOpts]);
   const doCopy=useCallback(async()=>{try{const blob=await new Promise(r=>canvasRef.current.toBlob(r,'image/png'));await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);setCopied(true);setTimeout(()=>setCopied(false),2000)}catch(e){console.error(e)}},[]);
   const copyField=useCallback(async(text,field)=>{try{await navigator.clipboard.writeText(text);setCopiedField(field);setTimeout(()=>setCopiedField(""),1500)}catch(e){console.error(e)}},[]);
   const resetAll=useCallback(()=>{setStep("upload");setActiveTab("generate");setWizardStep(1);setPdfFile(null);setPdfText("");setSelectedVibe("");setCustomVibe("");setHook("");setCaption("");setReaction("");setContext("");setTupleRaw("");setRendered(false);setAuthor("");setError("");setSelectedPhotos([]);setAiPickedPhotos([]);setSelectedBook(null);setChatMessages([]);setChatOpen(false);setHookVariants([]);setHookForgeOpen(false);setHookForgeError("");setDetectedTropes([]);setMysteryMode(false);setSwapText("");setSwapOpen(false);setSwapError("");setBookSummary("");setLetClaudeChoose(false);setCacheInfo(null);setSessionRestoredBanner(false);dbClearSession().catch(()=>{});window._pinterestSearches=null},[]);
@@ -1526,6 +1591,7 @@ ${bookText.substring(0,200000)}`}]}],generationConfig:{temperature:0.3,maxOutput
 
   // Auto-rerender canvas when switching back to Excerpt tab
   useEffect(()=>{if(activeTab==="excerpt"&&rendered&&tupleRaw&&canvasRef.current){setTimeout(()=>autoRender(tupleRaw),100)}},[activeTab]);
+  useEffect(()=>{if(rendered&&tupleRaw&&canvasRef.current){autoRender(tupleRaw)}},[excRenderOpts]);
   // Keep effort valid for the selected model (e.g. switching to Sonnet clears xhigh)
   useEffect(()=>{const allowed=EFFORT_BY_MODEL[claudeModel]||["high"];if(!allowed.includes(effort))setEffort(allowed.includes("high")?"high":allowed[allowed.length-1])},[claudeModel]);
 
@@ -2151,6 +2217,24 @@ No markdown, no backticks.
               <label style={ST.label}>Font Size <span style={{textTransform:"none",color:"#a09a93"}}>{fontSize}px</span></label>
               <div style={{display:"flex",alignItems:"center",gap:"8px"}}><span style={{fontSize:"10px",color:"#c4bfb8"}}>10</span><input type="range" min={10} max={30} value={fontSize} onChange={e=>setFontSize(Number(e.target.value))} style={{flex:1,accentColor:"#e85d3a"}} /><span style={{fontSize:"10px",color:"#c4bfb8"}}>30</span></div>
             </div>
+            <div>
+              <label style={ST.label}>Theme</label>
+              <div style={{display:"flex",gap:"6px"}}>
+                {Object.values(THEMES).map(t=>(
+                  <button key={t.id} onClick={()=>setExcTheme(t.id)} style={{...ST.btn,flex:1,padding:"8px 10px",fontSize:"11px",borderRadius:"8px",backgroundColor:excTheme===t.id?(t.id==="dark"?"#1a1815":"#fff"):"transparent",color:excTheme===t.id?(t.id==="dark"?"#fff":"#1a1815"):"#a09a93",border:`1px solid ${excTheme===t.id?"#1a1815":"#e8e6e1"}`,transition:"all 0.15s"}}>{t.label}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label style={ST.label}>Aspect Ratio</label>
+              <select value={excAspect} onChange={e=>setExcAspect(e.target.value)} style={{...ST.input,cursor:"pointer",appearance:"auto"}}>{ASPECTS.map(a=><option key={a.id} value={a.id}>{a.label}</option>)}</select>
+            </div>
+            <div>
+              <label onClick={()=>setExcRounded(v=>!v)} style={{display:"flex",alignItems:"center",gap:"8px",cursor:"pointer",userSelect:"none"}}>
+                <div style={{width:"14px",height:"14px",borderRadius:"3px",flexShrink:0,backgroundColor:excRounded?"#e85d3a":"transparent",border:`1px solid ${excRounded?"#e85d3a":"#e8e6e1"}`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:"10px",lineHeight:1}}>{excRounded?"✓":""}</div>
+                <span style={{fontSize:"11px",color:"#6b6660",fontFamily:UI_FONT}}>Rounded highlight corners</span>
+              </label>
+            </div>
             <div><label style={ST.label}>Author / Book</label><input value={author} onChange={e=>setAuthor(e.target.value)} placeholder="Author — Book Title" style={ST.input} /></div>
             <div>
               <label style={ST.label}>Tuple Data <span style={{textTransform:"none",color:"#c4bfb8"}}>(editable)</span></label>
@@ -2164,7 +2248,8 @@ No markdown, no backticks.
             <div style={{...ST.card,fontSize:"11px"}}>
               <div style={{...ST.label,marginBottom:"6px"}}>Legend</div>
               <div style={{display:"flex",flexWrap:"wrap",gap:"8px",marginBottom:"6px"}}>
-                {[["Male","#B5CDFD"],["Female","#FEC2D3"],["Internal","#FFF8B3"],["Other","#FDD9B0"],["Narr.",null]].map(([l,c])=>(<div key={l} style={{display:"flex",alignItems:"center",gap:"4px"}}><div style={{width:"10px",height:"10px",borderRadius:"2px",backgroundColor:c||"transparent",border:c?"none":"1px solid #e8e6e1"}} /><span style={{color:"#a09a93"}}>{l}</span></div>))}
+                {[["Male","male"],["Female","female"],["Internal","internal"],["Other","other"],["Narr.","narrative"]].map(([l,role])=>{const c=(THEMES[excTheme]||THEMES.light).hl[role];return(<div key={l} style={{display:"flex",alignItems:"center",gap:"4px"}}><div style={{width:"10px",height:"10px",borderRadius:"2px",backgroundColor:c||"transparent",border:c?"none":"1px solid #e8e6e1"}} /><span style={{color:"#a09a93"}}>{l}</span></div>)})}
+                <div style={{display:"flex",alignItems:"center",gap:"4px"}}><div style={{width:"10px",height:"2px",backgroundColor:(THEMES[excTheme]||THEMES.light).underline}} /><span style={{color:"#a09a93"}}>Peak</span></div>
               </div>
               <div style={{color:"#c4bfb8",fontFamily:"'DM Sans', sans-serif",lineHeight:1.6,fontSize:"10px"}}>_flow = same line · _underline = underline · _bold = bold · _italic = italic · w*rd = censor</div>
             </div>
@@ -2173,7 +2258,7 @@ No markdown, no backticks.
           <div style={{flex:1,padding:"18px",overflowY:"auto",display:"flex",flexDirection:"column",alignItems:"center"}}>
             <div style={{...ST.label,alignSelf:"flex-start",marginBottom:"12px"}}>Preview{author&&<span style={{textTransform:"none",marginLeft:"10px",color:"#c4bfb8",letterSpacing:"0"}}> — {author}</span>}</div>
             <div style={{boxShadow:rendered?"0 4px 24px rgba(26,24,21,0.08)":"none",borderRadius:rendered?"2px":"0"}}><canvas ref={canvasRef} style={{display:rendered?"block":"none"}} /></div>
-            {!rendered&&(<div style={{width:"540px",height:"350px",backgroundColor:"#fff",borderRadius:"8px",border:"1px dashed #e8e6e1",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:"10px"}}><div style={{fontSize:"28px",opacity:0.2}}>📖</div><div style={{color:"#c4bfb8",fontSize:"12px",fontFamily:"'DM Sans', sans-serif"}}>{tupleRaw?"Click Render to generate preview":"Generate an excerpt to preview"}</div></div>)}
+            {!rendered&&(<div style={{width:"540px",maxWidth:"100%",height:"350px",backgroundColor:(THEMES[excTheme]||THEMES.light).bg,borderRadius:"8px",border:`1px dashed ${excTheme==="dark"?"#3a3734":"#e8e6e1"}`,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:"10px"}}><div style={{fontSize:"28px",opacity:0.2}}>📖</div><div style={{color:excTheme==="dark"?"#6b6660":"#c4bfb8",fontSize:"12px",fontFamily:"'DM Sans', sans-serif"}}>{tupleRaw?"Click Render to generate preview":"Generate an excerpt to preview"}</div></div>)}
           </div>
         </div>
       )}
