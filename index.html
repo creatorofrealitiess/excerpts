@@ -38,7 +38,7 @@ const THEMES = {
   dark: {
     id: "dark", label: "Dark",
     bg: "#000000", text: "#FAFAF8", censor: "#FAFAF8",
-    underline: "#9A2A18", underlineW: 2.2,
+    underline: "#D02F2F", underlineW: 2.2,
     // Saturation 47% / lightness 41% — midway between the two tiers tested. Hues held at
     // male 221, female 348, internal 288, other 178 so pink and purple stay 60 apart.
     hl: { male: "#37579A", female: "#9A374B", internal: "#86379A", other: "#379A96", narrative: null },
@@ -1147,7 +1147,7 @@ function BookTokApp(){
   const[scanning,setScanning]=useState(false);
   const[scanError,setScanError]=useState("");
   const[letClaudeChoose,setLetClaudeChoose]=useState(false);
-  const APP_VERSION="v22";
+  const APP_VERSION="v23";
   // How much book text gets sent to Claude. Used by BOTH scene generation and chat —
   // they must match, or chat can't see scenes the generator found deeper in the book.
   // Sonnet 5 has a 1M-token context; ~900k chars is roughly 250k tokens, well within it.
