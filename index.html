@@ -32,13 +32,13 @@ const THEMES = {
   light: {
     id: "light", label: "Light",
     bg: "#FFFFFF", text: "#1a1a1a", censor: "#000000",
-    underline: "#1a1a1a", underlineW: 1.5,
+    underline: "#1a1a1a", underlineW: 1.5, underlineHalo: null,
     hl: { male: "#B5CDFD", female: "#FEC2D3", internal: "#FFF8B3", other: "#FDD9B0", narrative: null },
   },
   dark: {
     id: "dark", label: "Dark",
     bg: "#000000", text: "#FAFAF8", censor: "#FAFAF8",
-    underline: "#D02F2F", underlineW: 2.2,
+    underline: "#D02F2F", underlineW: 2.2, underlineHalo: "#000000",
     // Saturation 47% / lightness 41% — midway between the two tiers tested. Hues held at
     // male 221, female 348, internal 288, other 178 so pink and purple stay 60 apart.
     hl: { male: "#37579A", female: "#9A374B", internal: "#86379A", other: "#379A96", narrative: null },
@@ -585,6 +585,12 @@ function isBoldTag(tag) { return tag.includes("_bold"); }
 function isBoldItalicTag(tag) { return tag.includes("_bold_italic"); }
 function baseRole(tag) { return String(tag || "").replace(/_flow|_underline|_bold|_italic/g, "") || "narrative"; }
 function getHL(tag, theme) { return (theme || THEMES.light).hl[baseRole(tag)] || null; }
+// RENDER-TIME ONLY. Parsing deliberately keeps every quote and apostrophe straight — the
+// normalize step in parseTupleData flattens curly ones on the way in, which is what keeps
+// the tuple format robust against pasted book text. This runs at the moment of drawing,
+// long after parsing is done, so the stored tuples stay plain and editable while the
+// rendered pixels get the typographic apostrophe that real Kindle books use.
+function smartApostrophes(s) { return String(s || "").replace(/'/g, "\u2019"); }
 function hasCensor(w) { return w.includes("*"); }
 
 function buildGroups(entries) {
@@ -656,15 +662,18 @@ function renderKindle(canvas, groups, scale, fontName, fontSize, opts) {
   const IND = Math.round(FS * 1.2);
   const TM = 10 * S;
   const BM = 10 * S;
-  const HLP_T = Math.round(3 * S);
-  const HLP_B = Math.round(5 * S);
+  // Highlight band padding, above and below the type. Proportional to font size so the band
+  // keeps the same visual weight at any size — previously these were fixed pixel values, so
+  // a large font got a proportionally thin band and a small font a fat one.
+  const HLP_T = Math.round(FS * 0.14);
+  const HLP_B = Math.round(FS * 0.19);
   const fontStr = `500 ${FS}px "${fontName}", Georgia, serif`;
   ctx.font = fontStr;
 
   function tokenize(group) {
     const tokens = [];
     for (const entry of group) {
-      const parts = entry.text.split(/( +)/);
+      const parts = smartApostrophes(entry.text).split(/( +)/);
       for (const p of parts) {
         if (p === '') continue;
         tokens.push({ text: p, tag: entry.tag, isSp: /^ +$/.test(p) });
@@ -829,11 +838,23 @@ function renderKindle(canvas, groups, scale, fontName, fontSize, opts) {
       if (!isUnderlineTag(wps[ui].tok.tag)) { ui++; continue; }
       let ue = ui;
       while (ue + 1 < wps.length && isUnderlineTag(wps[ue + 1].tok.tag)) ue++;
+      const uy = ty + 3 * S, ux1 = wps[ui].x, ux2 = wps[ue].x + wps[ue].w;
+      // Halo first: a slightly wider dark stroke under the red. Invisible against the page
+      // background, but it cuts the line away from any highlight it crosses. Without it the
+      // red and the internal purple sit at nearly the same relative luminance (~0.19 vs
+      // ~0.16) and the underline disappears into the fill.
+      if (TH.underlineHalo) {
+        ctx.beginPath();
+        ctx.strokeStyle = TH.underlineHalo;
+        ctx.lineWidth = (TH.underlineW + 2.2) * S;
+        ctx.moveTo(ux1, uy); ctx.lineTo(ux2, uy);
+        ctx.stroke();
+      }
       ctx.beginPath();
       ctx.strokeStyle = TH.underline;
       ctx.lineWidth = TH.underlineW * S;
-      ctx.moveTo(wps[ui].x, ty + 3 * S);
-      ctx.lineTo(wps[ue].x + wps[ue].w, ty + 3 * S);
+      ctx.moveTo(ux1, uy);
+      ctx.lineTo(ux2, uy);
       ctx.stroke();
       ui = ue + 1;
     }
@@ -1147,7 +1168,7 @@ function BookTokApp(){
   const[scanning,setScanning]=useState(false);
   const[scanError,setScanError]=useState("");
   const[letClaudeChoose,setLetClaudeChoose]=useState(false);
-  const APP_VERSION="v23";
+  const APP_VERSION="v24";
   // How much book text gets sent to Claude. Used by BOTH scene generation and chat —
   // they must match, or chat can't see scenes the generator found deeper in the book.
   // Sonnet 5 has a 1M-token context; ~900k chars is roughly 250k tokens, well within it.
