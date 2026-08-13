@@ -39,7 +39,7 @@ const THEMES = {
     id: "dark", label: "Dark",
     bg: "#000000", text: "#FAFAF8", censor: "#FAFAF8",
     underline: "#9A2A18", underlineW: 2.2,
-    hl: { male: "#415580", female: "#7B3C5C", internal: "#713E7D", other: "#3E7D7B", narrative: null },
+    hl: { male: "#3357A3", female: "#A3334A", internal: "#8D33A3", other: "#33A39F" , narrative: null },
   },
 };
 const ASPECTS = [
@@ -627,9 +627,13 @@ function renderKindle(canvas, groups, scale, fontName, fontSize, opts) {
   // The visible canvas is composed from it at the end, optionally padded to an aspect ratio.
   const work = document.createElement('canvas');
   const ctx = work.getContext('2d');
-  const baseW = Math.round(540 * (fontSize / 20));
+  // Page width and side margins are FIXED, like a real Kindle page. Previously baseW and
+  // MX both scaled with fontSize, which meant every metric moved together — the output was
+  // just a uniformly scaled copy, so the type never changed size relative to the page.
+  // Now only the type scales: a larger font means fewer words per line and a taller image.
+  const baseW = 540;
   const CW = baseW * S;
-  const MX = Math.round(20 * (fontSize / 20)) * S;
+  const MX = 20 * S;
   const MTW = CW - MX * 2;
   const FS = fontSize * S;
   const LH = Math.round(FS * 1.55);
@@ -1103,6 +1107,7 @@ function BookTokApp(){
   const excRenderOpts=useMemo(()=>({theme:excTheme,aspect:excAspectRatio,rounded:excRounded}),[excTheme,excAspectRatio,excRounded]);
   useEffect(()=>{try{localStorage.setItem("pm_exc_theme",excTheme);localStorage.setItem("pm_exc_aspect",excAspect);localStorage.setItem("pm_exc_rounded",excRounded?"1":"0")}catch(e){}},[excTheme,excAspect,excRounded]);
   const[customFontName,setCustomFontName]=useState("");
+  const[fontOk,setFontOk]=useState(true);
   const fontFileRef=useRef(null);
   const pdfInputRef=useRef(null);
   const[photos,setPhotos]=useState([]);
@@ -1126,7 +1131,7 @@ function BookTokApp(){
   const[scanning,setScanning]=useState(false);
   const[scanError,setScanError]=useState("");
   const[letClaudeChoose,setLetClaudeChoose]=useState(false);
-  const APP_VERSION="v19";
+  const APP_VERSION="v20";
   // How much book text gets sent to Claude. Used by BOTH scene generation and chat —
   // they must match, or chat can't see scenes the generator found deeper in the book.
   // Sonnet 5 has a 1M-token context; ~900k chars is roughly 250k tokens, well within it.
@@ -1191,7 +1196,17 @@ function BookTokApp(){
   const loadCustomFont=useCallback(async(files)=>{if(!files||files.length===0)return;try{const fileArr=Array.from(files);// Derive base font name from first file, stripping variant suffixes
 const baseName=fileArr[0].name.replace(/\.\w+$/,'').replace(/[_\-\s]*(bold[_\-\s]*italic|bolditalic|italic|bold|regular)[_\-\s]*/i,'').trim()||fileArr[0].name.replace(/\.\w+$/,'');for(const file of fileArr){const buf=await file.arrayBuffer();const fname=file.name.toLowerCase();let weight='400',style='normal';if(/bold.?italic|bolditalic/i.test(fname)){weight='700';style='italic';}else if(/bold/i.test(fname)){weight='700';style='normal';}else if(/italic/i.test(fname)){weight='400';style='italic';}const f=new FontFace(baseName,buf,{weight,style});await f.load();document.fonts.add(f);}setCustomFontName(baseName);setFontName(baseName);}catch(e){console.error(e)}},[]);
 
-  useEffect(()=>{document.querySelectorAll('link[data-kindle-font]').forEach(el=>el.remove());if(fontName==="DejaVu Serif"){new FontFace("DejaVu Serif",`url(${DEJAVU_CDN})`).load().then(f=>document.fonts.add(f)).catch(()=>{})}else if(fontName!==customFontName){const l=document.createElement('link');l.href=`https://fonts.googleapis.com/css2?family=${fontName.replace(/ /g,'+')}:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap`;l.rel='stylesheet';l.setAttribute('data-kindle-font','true');document.head.appendChild(l)}},[fontName,customFontName]);
+  useEffect(()=>{document.querySelectorAll('link[data-kindle-font]').forEach(el=>el.remove());if(fontName===customFontName)return;if(fontName==="DejaVu Serif"){new FontFace("DejaVu Serif",`url(${DEJAVU_CDN})`).load().then(f=>document.fonts.add(f)).catch(()=>{});return}
+    // One <link> per axis value, deliberately. Google's css2 endpoint returns 400 for the
+    // ENTIRE request if any single requested weight or style is missing from the family, so
+    // the old combined URL (0,400;0,500;0,600;0,700;1,400) silently returned nothing for
+    // every font lacking a 500, a 600, or an italic — Gupter, Crimson Text and Merriweather
+    // all failed, and the canvas quietly fell back to Georgia. Split up, each face that
+    // does exist still loads and only the genuinely missing ones are skipped.
+    const fam=fontName.replace(/ /g,'+');
+    for(const spec of ["wght@400","wght@500","wght@700","ital,wght@1,400"]){const l=document.createElement('link');l.href=`https://fonts.googleapis.com/css2?family=${fam}:${spec}&display=swap`;l.rel='stylesheet';l.setAttribute('data-kindle-font','true');document.head.appendChild(l)}
+  },[fontName,customFontName]);
+  useEffect(()=>{let dead=false;setFontOk(true);const t=setTimeout(()=>{document.fonts.ready.then(()=>{if(!dead)setFontOk(document.fonts.check(`400 16px "${fontName}"`))})},1500);return()=>{dead=true;clearTimeout(t)}},[fontName]);
 
   useEffect(()=>{},[]);
 
@@ -1580,8 +1595,9 @@ ${bookText.substring(0,200000)}`}]}],generationConfig:{temperature:0.3,maxOutput
     }catch(e){console.error("Book summary generation failed:",e)}
   },[apiKey,model]);
 
-  const autoRender=useCallback((raw)=>{const entries=parseTupleData(raw||tupleRaw);if(!entries.length)return;document.fonts.load(`500 ${fontSize}px "${fontName}"`).then(()=>{if(canvasRef.current){renderKindle(canvasRef.current,buildGroups(entries),2,fontName,fontSize,excRenderOpts);setRendered(true)}})},[tupleRaw,fontName,fontSize,excRenderOpts]);
-  const doRender=useCallback(()=>{const entries=parseTupleData(tupleRaw);if(!entries.length){setError("No valid tuple data.");return}document.fonts.load(`500 ${fontSize}px "${fontName}"`).then(()=>{renderKindle(canvasRef.current,buildGroups(entries),2,fontName,fontSize,excRenderOpts);setRendered(true)})},[tupleRaw,fontName,fontSize,excRenderOpts]);
+  const loadFaces=useCallback(()=>Promise.all([`400 ${fontSize}px "${fontName}"`,`500 ${fontSize}px "${fontName}"`,`700 ${fontSize}px "${fontName}"`,`italic 400 ${fontSize}px "${fontName}"`].map(s=>document.fonts.load(s).catch(()=>{}))),[fontName,fontSize]);
+  const autoRender=useCallback((raw)=>{const entries=parseTupleData(raw||tupleRaw);if(!entries.length)return;loadFaces().then(()=>{if(canvasRef.current){renderKindle(canvasRef.current,buildGroups(entries),2,fontName,fontSize,excRenderOpts);setRendered(true)}})},[tupleRaw,fontName,fontSize,excRenderOpts,loadFaces]);
+  const doRender=useCallback(()=>{const entries=parseTupleData(tupleRaw);if(!entries.length){setError("No valid tuple data.");return}loadFaces().then(()=>{renderKindle(canvasRef.current,buildGroups(entries),2,fontName,fontSize,excRenderOpts);setRendered(true)})},[tupleRaw,fontName,fontSize,excRenderOpts,loadFaces]);
   const doCopy=useCallback(async()=>{try{const blob=await new Promise(r=>canvasRef.current.toBlob(r,'image/png'));await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);setCopied(true);setTimeout(()=>setCopied(false),2000)}catch(e){console.error(e)}},[]);
   const copyField=useCallback(async(text,field)=>{try{await navigator.clipboard.writeText(text);setCopiedField(field);setTimeout(()=>setCopiedField(""),1500)}catch(e){console.error(e)}},[]);
   const resetAll=useCallback(()=>{setStep("upload");setActiveTab("generate");setWizardStep(1);setPdfFile(null);setPdfText("");setSelectedVibe("");setCustomVibe("");setHook("");setCaption("");setReaction("");setContext("");setTupleRaw("");setRendered(false);setAuthor("");setError("");setSelectedPhotos([]);setAiPickedPhotos([]);setSelectedBook(null);setChatMessages([]);setChatOpen(false);setHookVariants([]);setHookForgeOpen(false);setHookForgeError("");setDetectedTropes([]);setMysteryMode(false);setSwapText("");setSwapOpen(false);setSwapError("");setBookSummary("");setLetClaudeChoose(false);setCacheInfo(null);setSessionRestoredBanner(false);dbClearSession().catch(()=>{});window._pinterestSearches=null},[]);
@@ -2207,7 +2223,7 @@ No markdown, no backticks.
             </div>
 
             <div style={{borderTop:"1px solid #e8e6e1",margin:"4px 0"}} />
-            <div><label style={ST.label}>Font</label><select value={fontName} onChange={e=>setFontName(e.target.value)} style={{...ST.input,cursor:"pointer",appearance:"auto"}}>{FONT_OPTIONS.map(f=><option key={f} value={f}>{f}</option>)}{customFontName&&<option value={customFontName}>{customFontName}</option>}</select></div>
+            <div><label style={ST.label}>Font</label><select value={fontName} onChange={e=>setFontName(e.target.value)} style={{...ST.input,cursor:"pointer",appearance:"auto"}}>{FONT_OPTIONS.map(f=><option key={f} value={f}>{f}</option>)}{customFontName&&<option value={customFontName}>{customFontName}</option>}</select>{!fontOk&&<div style={{marginTop:"5px",fontSize:"10px",color:"#e85d3a",fontFamily:UI_FONT}}>⚠ {fontName} didn't load — rendering in Georgia. Check your connection or pick another.</div>}</div>
             <div>
               <label style={ST.label}>Custom Font <span style={{textTransform:"none",color:"#c4bfb8"}}>(.ttf .woff2 .otf — select multiple for variants)</span></label>
               <input ref={fontFileRef} type="file" accept=".ttf,.woff,.woff2,.otf" multiple onChange={e=>loadCustomFont(e.target.files)} style={{display:"none"}} />
@@ -2230,10 +2246,12 @@ No markdown, no backticks.
               <select value={excAspect} onChange={e=>setExcAspect(e.target.value)} style={{...ST.input,cursor:"pointer",appearance:"auto"}}>{ASPECTS.map(a=><option key={a.id} value={a.id}>{a.label}</option>)}</select>
             </div>
             <div>
-              <label onClick={()=>setExcRounded(v=>!v)} style={{display:"flex",alignItems:"center",gap:"8px",cursor:"pointer",userSelect:"none"}}>
-                <div style={{width:"14px",height:"14px",borderRadius:"3px",flexShrink:0,backgroundColor:excRounded?"#e85d3a":"transparent",border:`1px solid ${excRounded?"#e85d3a":"#e8e6e1"}`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:"10px",lineHeight:1}}>{excRounded?"✓":""}</div>
-                <span style={{fontSize:"11px",color:"#6b6660",fontFamily:UI_FONT}}>Rounded highlight corners</span>
-              </label>
+              <label style={ST.label}>Highlight Corners</label>
+              <div style={{display:"flex",gap:"6px"}}>
+                {[["Rounded",true],["Square",false]].map(([l,v])=>(
+                  <button key={l} onClick={()=>setExcRounded(v)} style={{...ST.btn,flex:1,padding:"8px 10px",fontSize:"11px",borderRadius:"8px",backgroundColor:excRounded===v?"#fff":"transparent",color:excRounded===v?"#1a1815":"#a09a93",border:`1px solid ${excRounded===v?"#1a1815":"#e8e6e1"}`,transition:"all 0.15s"}}>{l}</button>
+                ))}
+              </div>
             </div>
             <div><label style={ST.label}>Author / Book</label><input value={author} onChange={e=>setAuthor(e.target.value)} placeholder="Author — Book Title" style={ST.input} /></div>
             <div>
