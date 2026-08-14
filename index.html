@@ -642,6 +642,7 @@ function renderKindle(canvas, groups, scale, fontName, fontSize, opts) {
   const O = opts || {};
   const TH = THEMES[O.theme] || THEMES.light;
   const ROUND = O.rounded !== false;
+  const PERLINE = !!O.perLine;
   const AR = O.aspect || null;
   const S = scale;
   // All layout and drawing happens on an offscreen buffer sized to the text block.
@@ -787,11 +788,14 @@ function renderKindle(canvas, groups, scale, fontName, fontSize, opts) {
       const prevLine = li > 0 ? lineData[li - 1] : null;
       const sameGroupAsPrev = prevLine && prevLine.groupIdx === ld.groupIdx;
       const prevLastCol = (sameGroupAsPrev && prevLine.wps.length > 0) ? getHL(prevLine.wps[prevLine.wps.length - 1].tok.tag, TH) : null;
-      const continuesFromPrev = isFirstWord && prevLastCol === col;
+      // PERLINE forces every segment to stand alone: no snapping to the margin, no
+      // extending past the last word, all four corners round independently. Same
+      // color-run detection either way — this only changes how the box is drawn.
+      const continuesFromPrev = !PERLINE && isFirstWord && prevLastCol === col;
       const nextLine = li < lineData.length - 1 ? lineData[li + 1] : null;
       const sameGroupAsNext = nextLine && nextLine.groupIdx === ld.groupIdx;
       const nextFirstCol = (sameGroupAsNext && nextLine.wps.length > 0) ? getHL(nextLine.wps[0].tok.tag, TH) : null;
-      const continuesToNext = isLastWord && nextFirstCol === col;
+      const continuesToNext = !PERLINE && isLastWord && nextFirstCol === col;
       const rx = continuesFromPrev ? MX : wps[hi].x;
       const rEndX = continuesToNext ? (CW - MX) : (wps[he].x + wps[he].w);
       const rt = ly - HLP_T;
@@ -800,8 +804,10 @@ function renderKindle(canvas, groups, scale, fontName, fontSize, opts) {
       ctx.fillStyle = col;
       if (ROUND && typeof ctx.roundRect === 'function' && rw > 0 && rh > 0) {
         // Corners on the side where the highlight carries onto another line stay square,
-        // so a wrapped highlight reads as one band instead of two separate pills.
-        const rad = Math.max(0, Math.min(Math.round(rh * 0.12), Math.floor(rw / 2)));
+        // so a wrapped highlight reads as one band instead of two separate pills — unless
+        // PERLINE is on, in which case continuesFromPrev/continuesToNext are already false
+        // and every corner rounds.
+        const rad = Math.max(0, Math.min(Math.round(rh * 0.22), Math.floor(rw / 2)));
         const L = continuesFromPrev ? 0 : rad;
         const R = continuesToNext ? 0 : rad;
         ctx.beginPath();
@@ -1139,9 +1145,10 @@ function BookTokApp(){
   const[excTheme,setExcTheme]=useState(()=>{try{return localStorage.getItem("pm_exc_theme")==="dark"?"dark":"light"}catch(e){return "light"}});
   const[excAspect,setExcAspect]=useState(()=>{try{const v=localStorage.getItem("pm_exc_aspect");return ASPECTS.some(a=>a.id===v)?v:"auto"}catch(e){return "auto"}});
   const[excRounded,setExcRounded]=useState(()=>{try{return localStorage.getItem("pm_exc_rounded")!=="0"}catch(e){return true}});
+  const[excPerLine,setExcPerLine]=useState(()=>{try{return localStorage.getItem("pm_exc_perline")==="1"}catch(e){return false}});
   const excAspectRatio=useMemo(()=>{const a=ASPECTS.find(x=>x.id===excAspect);return a?a.r:null},[excAspect]);
-  const excRenderOpts=useMemo(()=>({theme:excTheme,aspect:excAspectRatio,rounded:excRounded}),[excTheme,excAspectRatio,excRounded]);
-  useEffect(()=>{try{localStorage.setItem("pm_exc_theme",excTheme);localStorage.setItem("pm_exc_aspect",excAspect);localStorage.setItem("pm_exc_rounded",excRounded?"1":"0")}catch(e){}},[excTheme,excAspect,excRounded]);
+  const excRenderOpts=useMemo(()=>({theme:excTheme,aspect:excAspectRatio,rounded:excRounded,perLine:excPerLine}),[excTheme,excAspectRatio,excRounded,excPerLine]);
+  useEffect(()=>{try{localStorage.setItem("pm_exc_theme",excTheme);localStorage.setItem("pm_exc_aspect",excAspect);localStorage.setItem("pm_exc_rounded",excRounded?"1":"0");localStorage.setItem("pm_exc_perline",excPerLine?"1":"0")}catch(e){}},[excTheme,excAspect,excRounded,excPerLine]);
   useEffect(()=>{try{localStorage.setItem("pm_font_name",fontName)}catch(e){}},[fontName]);
   const[customFontName,setCustomFontName]=useState("");
   const[fontOk,setFontOk]=useState(true);
@@ -1168,7 +1175,7 @@ function BookTokApp(){
   const[scanning,setScanning]=useState(false);
   const[scanError,setScanError]=useState("");
   const[letClaudeChoose,setLetClaudeChoose]=useState(false);
-  const APP_VERSION="v24";
+  const APP_VERSION="v25";
   // How much book text gets sent to Claude. Used by BOTH scene generation and chat —
   // they must match, or chat can't see scenes the generator found deeper in the book.
   // Sonnet 5 has a 1M-token context; ~900k chars is roughly 250k tokens, well within it.
@@ -2328,6 +2335,14 @@ No markdown, no backticks.
               <div style={{display:"flex",gap:"6px"}}>
                 {[["Rounded",true],["Square",false]].map(([l,v])=>(
                   <button key={l} onClick={()=>setExcRounded(v)} style={{...ST.btn,flex:1,padding:"8px 10px",fontSize:"11px",borderRadius:"8px",backgroundColor:excRounded===v?"#fff":"transparent",color:excRounded===v?"#1a1815":"#a09a93",border:`1px solid ${excRounded===v?"#1a1815":"#e8e6e1"}`,transition:"all 0.15s"}}>{l}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label style={ST.label}>Highlight Style</label>
+              <div style={{display:"flex",gap:"6px"}}>
+                {[["Continuous",false],["Per Line",true]].map(([l,v])=>(
+                  <button key={l} onClick={()=>setExcPerLine(v)} style={{...ST.btn,flex:1,padding:"8px 10px",fontSize:"11px",borderRadius:"8px",backgroundColor:excPerLine===v?"#fff":"transparent",color:excPerLine===v?"#1a1815":"#a09a93",border:`1px solid ${excPerLine===v?"#1a1815":"#e8e6e1"}`,transition:"all 0.15s"}}>{l}</button>
                 ))}
               </div>
             </div>
