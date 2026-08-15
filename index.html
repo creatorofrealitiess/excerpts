@@ -1130,15 +1130,14 @@ function BookTokApp(){
     }catch(e){}
   },[rememberKeys,anthropicKey,apiKey]);
   const clearSavedKeys=useCallback(()=>{setAnthropicKey("");setApiKey("");try{localStorage.removeItem("pm_anthropic_key");localStorage.removeItem("pm_gemini_key")}catch(e){}},[]);
-  const[claudeModel,setClaudeModel]=useState("claude-opus-4-8");
-  const CLAUDE_MODELS = [{id:"claude-opus-4-8",label:"Opus 4.8"},{id:"claude-opus-4-7",label:"Opus 4.7"},{id:"claude-sonnet-5",label:"Sonnet 5"}];
-  // Which effort levels each model accepts (Sonnet 5 supports xhigh too, unlike the old 4.6)
+  const[claudeModel,setClaudeModel]=useState("claude-sonnet-5");
+  const CLAUDE_MODELS = [{id:"claude-sonnet-5",label:"Sonnet 5"},{id:"claude-opus-5",label:"Opus 5"}];
+  // Which effort levels each model accepts — both support the full five-level range.
   const EFFORT_BY_MODEL = {
-    "claude-opus-4-8": ["low","medium","high","xhigh","max"],
-    "claude-opus-4-7": ["low","medium","high","xhigh","max"],
     "claude-sonnet-5": ["low","medium","high","xhigh","max"],
+    "claude-opus-5": ["low","medium","high","xhigh","max"],
   };
-  const[effort,setEffort]=useState("high");
+  const[effort,setEffort]=useState("medium");
   const[model,setModel]=useState("gemini-3.1-pro-preview");
   const[useGeminiFallback,setUseGeminiFallback]=useState(false); // Sonnet does excerpts by default; this opts back into the old Gemini path
   const[showFallback,setShowFallback]=useState(false);
@@ -1194,7 +1193,7 @@ function BookTokApp(){
   const[scanning,setScanning]=useState(false);
   const[scanError,setScanError]=useState("");
   const[letClaudeChoose,setLetClaudeChoose]=useState(false);
-  const APP_VERSION="v26";
+  const APP_VERSION="v27";
   // How much book text gets sent to Claude. Used by BOTH scene generation and chat —
   // they must match, or chat can't see scenes the generator found deeper in the book.
   // Sonnet 5 has a 1M-token context; ~900k chars is roughly 250k tokens, well within it.
