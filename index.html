@@ -1109,8 +1109,27 @@ function BookTokApp(){
   const[activeTab,setActiveTab]=useState("generate");
   const[step,setStep]=useState("upload");
   const[wizardStep,setWizardStep]=useState(1); // 1=API keys, 2=Select book, 3=Select vibe
-  const[apiKey,setApiKey]=useState("");
-  const[anthropicKey,setAnthropicKey]=useState("");
+  // Both keys are already sent client-side on every generate call — that's inherent to a
+  // static GitHub Pages app calling api.anthropic.com directly from the browser, no backend
+  // in between. Caching them to localStorage doesn't create new exposure over what already
+  // happens each time they're used; it just makes that exposure persist across sessions
+  // instead of resetting on refresh. Off by default so it's an opt-in, not a surprise.
+  const[rememberKeys,setRememberKeys]=useState(()=>{try{return localStorage.getItem("pm_remember_keys")==="1"}catch(e){return false}});
+  const[apiKey,setApiKey]=useState(()=>{try{return rememberKeys?atob(localStorage.getItem("pm_gemini_key")||""):""}catch(e){return ""}});
+  const[anthropicKey,setAnthropicKey]=useState(()=>{try{return rememberKeys?atob(localStorage.getItem("pm_anthropic_key")||""):""}catch(e){return ""}});
+  useEffect(()=>{
+    try{
+      if(rememberKeys){
+        if(anthropicKey)localStorage.setItem("pm_anthropic_key",btoa(anthropicKey));else localStorage.removeItem("pm_anthropic_key");
+        if(apiKey)localStorage.setItem("pm_gemini_key",btoa(apiKey));else localStorage.removeItem("pm_gemini_key");
+      } else {
+        localStorage.removeItem("pm_anthropic_key");
+        localStorage.removeItem("pm_gemini_key");
+      }
+      localStorage.setItem("pm_remember_keys",rememberKeys?"1":"0");
+    }catch(e){}
+  },[rememberKeys,anthropicKey,apiKey]);
+  const clearSavedKeys=useCallback(()=>{setAnthropicKey("");setApiKey("");try{localStorage.removeItem("pm_anthropic_key");localStorage.removeItem("pm_gemini_key")}catch(e){}},[]);
   const[claudeModel,setClaudeModel]=useState("claude-opus-4-8");
   const CLAUDE_MODELS = [{id:"claude-opus-4-8",label:"Opus 4.8"},{id:"claude-opus-4-7",label:"Opus 4.7"},{id:"claude-sonnet-5",label:"Sonnet 5"}];
   // Which effort levels each model accepts (Sonnet 5 supports xhigh too, unlike the old 4.6)
@@ -1175,7 +1194,7 @@ function BookTokApp(){
   const[scanning,setScanning]=useState(false);
   const[scanError,setScanError]=useState("");
   const[letClaudeChoose,setLetClaudeChoose]=useState(false);
-  const APP_VERSION="v25";
+  const APP_VERSION="v26";
   // How much book text gets sent to Claude. Used by BOTH scene generation and chat —
   // they must match, or chat can't see scenes the generator found deeper in the book.
   // Sonnet 5 has a 1M-token context; ~900k chars is roughly 250k tokens, well within it.
@@ -2070,6 +2089,13 @@ No markdown, no backticks.
                 <div>
                   <label style={ST.label}>Claude API Key</label>
                   <input type="password" value={anthropicKey} onChange={e=>setAnthropicKey(e.target.value)} placeholder="Paste your Anthropic API key" style={{...ST.input,fontFamily:"'DM Sans', sans-serif",fontSize:"13px"}} />
+                  <div style={{marginTop:"7px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <label style={{display:"flex",alignItems:"center",gap:"7px",cursor:"pointer",fontSize:"11px",color:"#a09a93",fontFamily:UI_FONT}}>
+                      <input type="checkbox" checked={rememberKeys} onChange={e=>setRememberKeys(e.target.checked)} style={{cursor:"pointer"}} />
+                      Remember keys on this device
+                    </label>
+                    {rememberKeys&&(anthropicKey||apiKey)&&<button onClick={clearSavedKeys} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:"11px",color:"#c4bfb8",fontFamily:UI_FONT,textDecoration:"underline"}}>Clear</button>}
+                  </div>
                 </div>
                 <div>
                   <label style={ST.label}>Claude Model <span style={{textTransform:"none",color:"#c4bfb8"}}>(scene, hook, caption, tuples)</span></label>
