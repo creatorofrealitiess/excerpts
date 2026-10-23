@@ -1130,11 +1130,11 @@ function BookTokApp(){
     }catch(e){}
   },[rememberKeys,anthropicKey,apiKey]);
   const clearSavedKeys=useCallback(()=>{setAnthropicKey("");setApiKey("");try{localStorage.removeItem("pm_anthropic_key");localStorage.removeItem("pm_gemini_key")}catch(e){}},[]);
-  const[claudeModel,setClaudeModel]=useState("claude-sonnet-5");
-  const CLAUDE_MODELS = [{id:"claude-sonnet-5",label:"Sonnet 5"},{id:"claude-opus-5",label:"Opus 5"}];
+  const[claudeModel,setClaudeModel]=useState("claude-sonnet-5-5");
+  const CLAUDE_MODELS = [{id:"claude-sonnet-5.5",label:"Sonnet 5.5"},{id:"claude-opus-5",label:"Opus 5"}];
   // Which effort levels each model accepts — both support the full five-level range.
   const EFFORT_BY_MODEL = {
-    "claude-sonnet-5": ["low","medium","high","xhigh","max"],
+    "claude-sonnet-5.5": ["low","medium","high","xhigh","max"],
     "claude-opus-5": ["low","medium","high","xhigh","max"],
   };
   const[effort,setEffort]=useState("medium");
