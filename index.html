@@ -59,10 +59,20 @@ const DEJAVU_CDN = "https://cdn.jsdelivr.net/gh/dejavu-fonts/dejavu-fonts@master
 const UI_FONT = "'DM Sans', -apple-system, sans-serif";
 
 const PROJECT_MAP = [
-  { initials: "RE", authors: ["Veda Rose", "Lila Blair", "Zara Blaze", "Liv Raven"] },
+  { initials: "RE", authors: ["Veda Rose", "Lila Blair", "Zara Blaze"] },
   { initials: "DK", authors: ["Lys Kane", "Lexi Asher"] },
   { initials: "PV", authors: ["Lara Hart"] },
+  { initials: "BABU", authors: ["S.E. Ash", "S. E. Ash", "SE Ash"] },
 ];
+const PROJECT_KEYS = PROJECT_MAP.map(p => p.initials);
+const PROJECT_COLORS = {
+  RE:   { color: "#e85d3a", bg: "#fef0ec" },
+  DK:   { color: "#6366f1", bg: "#eef0fe" },
+  PV:   { color: "#d946a8", bg: "#fdf0fa" },
+  BABU: { color: "#14a38b", bg: "#e8f6f3" },
+};
+const projColorOf = p => (PROJECT_COLORS[p] || PROJECT_COLORS.PV).color;
+const projBgOf = p => (PROJECT_COLORS[p] || PROJECT_COLORS.PV).bg;
 function getProject(authorField) {
   if (!authorField) return null;
   const lower = authorField.toLowerCase();
@@ -1193,7 +1203,7 @@ function BookTokApp(){
   const[scanning,setScanning]=useState(false);
   const[scanError,setScanError]=useState("");
   const[letClaudeChoose,setLetClaudeChoose]=useState(false);
-  const APP_VERSION="v27";
+  const APP_VERSION="v28";
   // How much book text gets sent to Claude. Used by BOTH scene generation and chat —
   // they must match, or chat can't see scenes the generator found deeper in the book.
   // Sonnet 5 has a 1M-token context; ~900k chars is roughly 250k tokens, well within it.
@@ -2186,7 +2196,7 @@ No markdown, no backticks.
                         <div>
                           <label style={ST.label}>Project</label>
                           <div style={{display:"flex",gap:"6px"}}>
-                            {["RE","DK","PV"].map(p=>(<button key={p} onClick={()=>setNewBookProject(p)} style={{padding:"6px 14px",borderRadius:"4px",fontSize:"11px",fontWeight:600,fontFamily:"'DM Sans', sans-serif",border:"1px solid",cursor:"pointer",borderColor:newBookProject===p?(p==="RE"?"#e85d3a":p==="DK"?"#6366f1":"#d946a8"):"#e8e6e1",backgroundColor:newBookProject===p?(p==="RE"?"#fef0ec":p==="DK"?"#eef0fe":"#fdf0fa"):"transparent",color:newBookProject===p?(p==="RE"?"#e85d3a":p==="DK"?"#6366f1":"#d946a8"):"#a09a93"}}>{p}</button>))}
+                            {PROJECT_KEYS.map(p=>(<button key={p} onClick={()=>setNewBookProject(p)} style={{padding:"6px 14px",borderRadius:"4px",fontSize:"11px",fontWeight:600,fontFamily:"'DM Sans', sans-serif",border:"1px solid",cursor:"pointer",borderColor:newBookProject===p?projColorOf(p):"#e8e6e1",backgroundColor:newBookProject===p?projBgOf(p):"transparent",color:newBookProject===p?projColorOf(p):"#a09a93"}}>{p}</button>))}
                           </div>
                         </div>
                         <div style={{flex:1}} />
@@ -2198,11 +2208,11 @@ No markdown, no backticks.
 
                 {/* Book dropdowns by project */}
                 <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-                  {["RE","DK","PV"].map(proj=>{
+                  {PROJECT_KEYS.map(proj=>{
                     const projBooks=books.filter(b=>b.project===proj);
-                    const projColor=proj==="RE"?"#e85d3a":proj==="DK"?"#6366f1":"#d946a8";
-                    const projBg=proj==="RE"?"#fef0ec":proj==="DK"?"#eef0fe":"#fdf0fa";
-                    const projBorder=proj==="RE"?"#e85d3a":proj==="DK"?"#6366f1":"#d946a8";
+                    const projColor=projColorOf(proj);
+                    const projBg=projBgOf(proj);
+                    const projBorder=projColorOf(proj);
                     const selId=selectedBook&&selectedBook.project===proj?selectedBook.id:"";
                     return (
                       <div key={proj} style={{display:"flex",alignItems:"center",gap:"10px"}}>
@@ -2304,7 +2314,7 @@ No markdown, no backticks.
       {activeTab==="excerpt"&&step==="results"&&(
         <div style={{display:"flex",minHeight:"calc(100vh - 90px)",paddingBottom:"60px"}}>
           <div style={{width:"430px",minWidth:"390px",padding:"18px",borderRight:"1px solid #e8e6e1",overflowY:"auto",display:"flex",flexDirection:"column",gap:"14px"}}>
-            {getProject(author)&&<div style={{display:"flex",alignItems:"center",gap:"8px",padding:"8px 12px",backgroundColor:"#fff",borderRadius:"6px",border:"1px solid #e8e6e1"}}><span style={{fontSize:"10px",fontWeight:700,letterSpacing:"1.5px",padding:"3px 8px",borderRadius:"4px",backgroundColor:getProject(author)==="RE"?"#fef0ec":getProject(author)==="DK"?"#eef0fe":"#fdf0fa",color:getProject(author)==="RE"?"#e85d3a":getProject(author)==="DK"?"#6366f1":"#d946a8",fontFamily:"'DM Sans', sans-serif"}}>{getProject(author)}</span><span style={{fontSize:"11px",color:"#a09a93",fontFamily:"'DM Sans', sans-serif"}}>Tasks {getProject(author)}</span></div>}
+            {getProject(author)&&<div style={{display:"flex",alignItems:"center",gap:"8px",padding:"8px 12px",backgroundColor:"#fff",borderRadius:"6px",border:"1px solid #e8e6e1"}}><span style={{fontSize:"10px",fontWeight:700,letterSpacing:"1.5px",padding:"3px 8px",borderRadius:"4px",backgroundColor:projBgOf(getProject(author)),color:projColorOf(getProject(author)),fontFamily:"'DM Sans', sans-serif"}}>{getProject(author)}</span><span style={{fontSize:"11px",color:"#a09a93",fontFamily:"'DM Sans', sans-serif"}}>Tasks {getProject(author)}</span></div>}
 
             {/* === EXCERPT SWAP === */}
             <div style={{...ST.card,border:swapOpen?"1px solid #e85d3a":"1px solid #e8e6e1",transition:"border-color 0.2s"}}>
